@@ -1,16 +1,30 @@
-# TODO: add support for OR predicates
-
 import os
 from sqlglot import parse_one
 from sqlglot import exp
 from sqlglot.optimizer.scope import build_scope
 
-def parse_query(sql):
-    supported_ops = (exp.EQ, exp.Between,
+def nodes_eq(node1, node2):
+    if str(node1) == str(node2):
+        return True
+    return False
+
+def transformer(node, node_to_remove):
+    if nodes_eq(node, node_to_remove):
+        return None
+    return node
+
+def remove_node(tree,node_to_remove):
+    return tree.transform(transformer,node_to_remove=node_to_remove)
+
+
+def parse_query(sql,verbose=False):
+    supported_ops = (exp.EQ, exp.NEQ, exp.Between,
                     exp.LT,exp.GT, exp.LTE, 
-                    exp.GTE, exp.Like, exp.In)
+                    exp.GTE, exp.Like, exp.In,
+                    exp.Is,exp.Not,exp.Or)
 
     ast = parse_one(sql)
+    # print(repr(ast))
     root = build_scope(ast)
 
     tables = [
@@ -47,12 +61,19 @@ def parse_query(sql):
             join_preds.append(str(pred))
 
     wh = ast.find(exp.Where)
-
-    for pred in wh.find_all(supported_ops):
-        if pred.find(exp.Literal):
+    if verbose:
+        print("Original Where",str(wh))
+    while wh.find(supported_ops):
+        pred = wh.find(supported_ops)
+        if pred.find(exp.Literal,exp.Null):
             local_preds.append(str(pred))
         else:
             join_preds.append(str(pred))
+        # if pred.find((exp.Not)):
+        wh = remove_node(wh,pred)
+        if verbose:
+            print("------- > Removing", str(pred))
+            print("Updated Where",str(wh))
     
     return tables_dict,join_preds,local_preds
 
