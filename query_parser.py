@@ -1,28 +1,14 @@
-# what is needed? 
-#   - the adjacency matrix
-#   - join type
-#   - join operator
-#   - column cardinalities -> colcard / card
-#   - table cardinalities -> colcard / card
-#   - column skewness
-#   - join cardinality from sample -> join selectivity
-#   - distinct values from each side of a join
-#   - number of matches between the two sides -> inclusion factor
-#   - local predicate selectivites (from either the sample or the optimizer)
-#   - pairwise correlation between predicate columns
+# TODO: add support for OR predicates
 
 import os
 from sqlglot import parse_one
 from sqlglot import exp
 from sqlglot.optimizer.scope import build_scope
 
-supported_ops = (exp.EQ,exp.Between,
-                exp.LT,exp.GT,
-                exp.LTE, exp.GTE, exp.Like)
-
-
 def parse_query(sql):
-    print(sql)
+    supported_ops = (exp.EQ, exp.Between,
+                    exp.LT,exp.GT, exp.LTE, 
+                    exp.GTE, exp.Like, exp.In)
 
     ast = parse_one(sql)
     root = build_scope(ast)
@@ -46,7 +32,6 @@ def parse_query(sql):
 
     tables_dict = {}
     for table in tables:
-        # print(repr(table))
         tb_name = str(table.args['this'])
         if table.find(exp.TableAlias):
             tb_id = str(table.args['alias'])
@@ -57,52 +42,30 @@ def parse_query(sql):
     join_preds = []
     local_preds = []
 
-    print("ON Preds: ")
     for join in ast.find_all(exp.Join):
         for pred in join.find_all(supported_ops):
             join_preds.append(str(pred))
-            # print(repr(pred))
 
-    print("Where Preds: ")
     wh = ast.find(exp.Where)
+
     for pred in wh.find_all(supported_ops):
         if pred.find(exp.Literal):
             local_preds.append(str(pred))
         else:
             join_preds.append(str(pred))
-        # print(repr(pred))
+    
+    return tables_dict,join_preds,local_preds
 
-    print("Tables:")
-    print(tables_dict)
-
-    print("Join Predicate")
-    print(join_preds)
-
-    print("Local Predicate:")
-    print(local_preds)
-
-
-# sql="""SELECT MIN(mc.note) AS production_note
-# FROM 
-#     movie_info_idx AS mi_idx 
-#     INNER JOIN movie_companies AS mc 
-#         ON mc.movie_id = mi_idx.movie_id
-#     INNER JOIN title AS t
-#         ON t.id = mc.movie_id,
-#     info_type AS it,
-#     company_type AS ct
-# WHERE 
-#     ct.id = mc.company_type_id
-#     AND it.id = mi_idx.info_type_id
-#     AND ct.kind BETWEEN 'production companies' AND 'z'
-#     AND ct.kind like '%production companies%';"""
 input_dir = './input'
 input_dir_enc = os.fsencode(input_dir)
+
 queries = []
+query_ids = []
+
 for file in os.listdir(input_dir_enc):
     filename = os.fsdecode(file)
     if filename.endswith(".sql"):
-        print(filename)
+        query_ids.append(filename)
         with open(os.path.join(input_dir, filename)) as f:
             file_lines = f.readlines()
             file_content = []
@@ -110,16 +73,19 @@ for file in os.listdir(input_dir_enc):
                 if line.strip('\n').strip(' ') != '':
                     file_content.append(line)
             file_content=''.join(file_content)
-            # print(file_content.upper().split('SELECT '))
             queries.extend(['SELECT '+query for query in file_content.upper().split('SELECT ')[1:]])
-print(queries)
 
-for sql in queries:
-    parse_query(sql)
-    # sql = file.readlines()
-    # sql=''.join(sql)
-    # print(sql)
+for idx,sql in enumerate(queries): 
+    tables_dict,join_preds,local_preds=parse_query(sql)
     
-    # with open('./input/1a.sql') as f:
-    #     sql = f.readlines()
-    # sql=''.join(sql)
+    print("Query ID: ",query_ids[idx])
+    print(sql)
+    
+    print("Tables {<alias>:<table_name>}:")
+    print(tables_dict)
+
+    print("Join Predicate:")
+    print(join_preds)
+
+    print("Local Predicate:")
+    print(local_preds)
