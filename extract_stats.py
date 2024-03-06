@@ -1,10 +1,6 @@
-# TODO: use parsed query information for per-query stats collection
 import os
 import numpy as np
 import pandas as pd
-import re
-import sys
-import traceback
 import json
 from db_util import load_db_schema
 

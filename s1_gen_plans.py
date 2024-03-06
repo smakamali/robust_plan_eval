@@ -336,7 +336,7 @@ def generateExplains(max_num_queries, schema_name, encFileID, queriesFile):
 
         if query_success_id%10:
             # delete dump files: '/home/db2inst1/sqllib/db2dump/DIAG0000/FODC_AppErr_*'
-            command = 'sudo rm -r -f /home/db2inst1/sqllib/db2dump/DIAG0000/FODC_AppErr_*'
+            command = 'sudo rm -r -f ~/sqllib/db2dump/DIAG0000/FODC_AppErr_*'
             process = Popen( "/bin/bash", shell=False, universal_newlines=True,
                         stdin=PIPE, stdout=PIPE, stderr=PIPE)
             output, _ = process.communicate(command)
@@ -354,7 +354,7 @@ def generateExplains(max_num_queries, schema_name, encFileID, queriesFile):
     print()
 
 if __name__ == '__main__':
-    generateExplains(max_num_queries = 5, # Specify the max number of queries to explain
+    generateExplains(max_num_queries = 10, # Specify the max number of queries to explain
                     schema_name = 'TPCDS', # schema name
                     encFileID = "1-4j_0-2extjp_2-5lp_tmp",
                     queriesFile = "./input/input_queries.sql")

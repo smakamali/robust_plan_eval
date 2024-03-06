@@ -1,10 +1,6 @@
 import os
-import ast
-import subprocess as sp
 from subprocess import Popen, PIPE
 import pandas as pd
-import ibm_db
-import ibm_db_dbi
 from db_util import *
 
 def get_card_sel(conn_str):

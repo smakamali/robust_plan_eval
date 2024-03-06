@@ -1,5 +1,3 @@
-# TODO: get the join tables and columns from parse_query 
-
 import os
 import numpy as np
 import pandas as pd

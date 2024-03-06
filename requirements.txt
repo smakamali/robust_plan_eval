@@ -1,3 +1,6 @@
 numpy
 pandas
 ibm-db
+scikit-learn
+scipy
+sqlglot
