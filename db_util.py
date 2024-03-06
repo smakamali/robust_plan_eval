@@ -1,6 +1,9 @@
+import os
+from subprocess import Popen, PIPE
 import pandas as pd
 import ibm_db
 import ibm_db_dbi
+
 
 
 def connect_to_db(conn_str, verbose=False):
@@ -24,6 +27,37 @@ def close_connection_to_db(ibm_db_conn, verbose = False):
         else:
             print('Closing the connection failed or connection did not exist.')
     return rc
+
+def create_explain_tables(schema_name,cmd_verbose=False):
+    
+    dir='./temp'
+    
+    if not os.path.isdir(dir):
+        os.mkdir(dir)
+    file_path = os.path.join(dir,'temp.sql')
+    
+    process = Popen( "/bin/bash", shell=False,
+                    universal_newlines=True,
+                    stdin=PIPE, stdout=PIPE, stderr=PIPE)
+        
+    stmt= """connect to {};
+CALL SYSPROC.SYSINSTALLOBJECTS('EXPLAIN', 'C', 
+        CAST (NULL AS VARCHAR(128)), CAST (NULL AS VARCHAR(128)));
+commit;
+connect reset;""".format(schema_name)
+
+    with open(file_path,'w') as f:
+        f.write(stmt)
+    
+    cmd='db2 -tvf {};\n'.format(file_path)
+    
+    output,_ = process.communicate(cmd)
+    
+    if cmd_verbose:
+        cmds = cmd.split('\n')
+        for cmd in cmds:
+            print('>> ',cmd)
+    print(output)
 
 def load_db_schema(schema_name, conn_str):
     schema_name=schema_name.upper()
