@@ -1,4 +1,3 @@
-import os
 from sqlglot import parse_one
 from sqlglot import exp
 from sqlglot.optimizer.scope import build_scope
@@ -8,20 +7,32 @@ def nodes_eq(node1, node2):
         return True
     return False
 
-def transformer(node, node_to_remove):
+def delete_node(node, node_to_remove):
     if nodes_eq(node, node_to_remove):
         return None
     return node
 
 def remove_node(tree,node_to_remove):
-    return tree.transform(transformer,node_to_remove=node_to_remove)
+    return tree.transform(delete_node,node_to_remove=node_to_remove)
 
+def upper(input):
+    if isinstance(input,dict):
+        output = input.copy()
+        for key in input:
+            output[key.upper()]=input[key].upper()
+        return output
+    if isinstance(input,list):
+        for idx,l in enumerate(input):
+            if isinstance(l,list):
+                input[idx]=upper(l)
+            elif isinstance(l,str):
+                input[idx]=l.upper()
+            else:
+                raise Exception("the input must of list of lists of strings")
+        return input
 
 def parse_query(sql,verbose=False):
-    supported_ops = (exp.EQ, exp.NEQ, exp.Between,
-                    exp.LT,exp.GT, exp.LTE, 
-                    exp.GTE, exp.Like, exp.In,
-                    exp.Is,exp.Not,exp.Or)
+    supported_ops = (exp.Predicate,exp.Unary,exp.Or)
 
     ast = parse_one(sql)
     # print(repr(ast))
@@ -53,12 +64,22 @@ def parse_query(sql,verbose=False):
             tb_id = str(table.args['this'])
         tables_dict[tb_id]=tb_name
 
+    # print(repr(ast))
+
+    # find all columns
+
+    print("-----------------------------")
     join_preds = []
     local_preds = []
+    pred_cols = []
 
     for join in ast.find_all(exp.Join):
         for pred in join.find_all(supported_ops):
             join_preds.append(str(pred))
+            # print("pred",repr(pred))
+            for col in pred.find_all(exp.Column):
+                pred_cols.append(str(col))
+                # print(col)
 
     wh = ast.find(exp.Where)
     if verbose:
@@ -69,44 +90,41 @@ def parse_query(sql,verbose=False):
             local_preds.append(str(pred))
         else:
             join_preds.append(str(pred))
+        # print("where pred cols")
+        for col in pred.find_all(exp.Column):
+            pred_cols.append(str(col))
+            # print(col)
         # if pred.find((exp.Not)):
         wh = remove_node(wh,pred)
         if verbose:
             print("------- > Removing", str(pred))
             print("Updated Where",str(wh))
     
-    return tables_dict,join_preds,local_preds
+    # get unique predicate columns
+    pred_cols=list(dict.fromkeys(pred_cols))
 
-input_dir = './input'
-input_dir_enc = os.fsencode(input_dir)
+    return upper(tables_dict),upper(join_preds),upper(local_preds),upper(pred_cols)
 
-queries = []
-query_ids = []
+# THE FOLLOWING LINES FOR TESTING
+# sql = """SELECT MIN(mc.note) AS production_note,
+#        MIN(t.title) AS movie_title,
+#        MIN(t.production_year) AS movie_year
+# FROM company_type AS ct
+#     INNER JOIN movie_companies AS mc
+#     ON ct.id = mc.company_type_id,
+#      info_type AS it,
+#      movie_info_idx AS mi_idx,
+#      title AS t
+# WHERE ct.kind = 'production companies'
+#   AND it.info = 'top 250 rank'
+#   AND mc.note NOT LIKE '%(as Metro-Goldwyn-Mayer Pictures)%'
+#   AND (mc.note LIKE '%(co-production)%'
+#        OR mc.note LIKE '%(presents)%')
+#   AND t.id = mc.movie_id
+#   AND t.id = mi_idx.movie_id
+#   AND mc.movie_id = mi_idx.movie_id
+#   AND it.id = mi_idx.info_type_id;"""
+# parse_query(sql,verbose=True)
 
-for file in os.listdir(input_dir_enc):
-    filename = os.fsdecode(file)
-    if filename.endswith(".sql"):
-        query_ids.append(filename)
-        with open(os.path.join(input_dir, filename)) as f:
-            file_lines = f.readlines()
-            file_content = []
-            for line in file_lines:
-                if line.strip('\n').strip(' ') != '':
-                    file_content.append(line)
-            file_content=''.join(file_content)
-            queries.extend(['SELECT '+query for query in file_content.upper().split('SELECT ')[1:]])
 
-for idx,sql in enumerate(queries): 
-    tables_dict,join_preds,local_preds=parse_query(sql)
-    
-    print("Query ID: ",query_ids[idx])
-    print(sql)
-    
-    print("Tables {<alias>:<table_name>}:")
-    print(tables_dict)
-
-    print("Join Predicate:")
-    print(join_preds)
-
-    print("Local Predicate:")
-    print(local_preds)
+# print(upper([['sdsA','sadf'],['gdfg','rwer',['erwe']]]))

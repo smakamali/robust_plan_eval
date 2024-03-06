@@ -38,6 +38,19 @@ def load_db_schema(schema_name, conn_str):
     _ = close_connection_to_db(ibm_db_conn, verbose = True)
     return table_dict
 
+def load_tab_card(schema_name, conn_str):
+    schema_name=schema_name.upper()
+    tab_card_dict = {}
+    ibm_db_conn, ibm_db_dbi_conn = connect_to_db(conn_str, verbose=False)
+    sql = "SELECT  trim(TABSCHEMA)||'.'||trim(TABNAME) FROM SYSCAT.TABLES WHERE TABSCHEMA=\'" + schema_name+"\' AND TYPE = 'T';"
+    table_list = pd.read_sql(sql,ibm_db_dbi_conn).values.flatten().tolist()
+    for table in table_list:
+        sql = "select count(*) from "+schema_name+"."+table+";"
+        tab_card = pd.read_sql(sql,ibm_db_dbi_conn).values.flatten().tolist()[0]
+        tab_card_dict[table] = tab_card
+    _ = close_connection_to_db(ibm_db_conn, verbose = False)
+    print("Base table cards collected!")
+    return tab_card_dict
 
 def load_col_types(schema_name, conn_str):
     schema_name=schema_name.upper()
@@ -51,7 +64,7 @@ def load_col_types(schema_name, conn_str):
 def load_pkfk(schema_name, conn_str):
     schema_name=schema_name.upper()
     ibm_db_conn, ibm_db_dbi_conn = connect_to_db(conn_str, verbose=True)
-    sql = "select trim(creator), trim(tbname), trim(fkcolnames), trim(reftbcreator), trim(reftbname), trim(pkcolnames) from sysibm.sysrels;"
+    sql = "select trim(creator), trim(tbname), trim(creator)|| '.' ||trim(tbname)|| '.' ||trim(fkcolnames), trim(reftbcreator), trim(reftbname), trim(reftbcreator)|| '.' ||trim(reftbname)|| '.' ||trim(pkcolnames) from sysibm.sysrels where creator = \'{}\';".format(schema_name)
     pk_fk = pd.read_sql(sql,ibm_db_dbi_conn)
     _ = close_connection_to_db(ibm_db_conn, verbose = True)
     return pk_fk
