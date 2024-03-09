@@ -1,21 +1,13 @@
-# what is needed? 
-#   - the adjacency matrix
-#   - join type
-#   - join operator
-#   - column cardinalities -> colcard / card
-#   - table cardinalities -> colcard / card
-#   - column skewness
-#   - join cardinality from sample -> join selectivity
-#   - distinct values from each side of a join
-#   - number of matches between the two sides -> inclusion factor
-#   - local predicate selectivites (from either the sample or the optimizer)
-#   - pairwise correlation between predicate columns
+# TODO: 
+    # can replace the following code block used to create id_tab with the new dbutil.load_db_schema
+
 import os
 import json
 import numpy as np
 import pandas as pd
 from extract_join_attraction import get_query_join_preds
 from db_util import load_tab_card
+from util import load_input_queries
 
 def encodeOps (ops):
     encOps = []
@@ -75,6 +67,7 @@ def generate_join_graph(schema_name,encFileID,max_num_queries):
     # join_attractions = pd.read_csv(os.path.join(internal_dir,'JoinAttractions.csv'),header=0)
     # print(join_attractions)
 
+    # TODO: can replace the following code block with the new dbutil.load_db_schema
     table_card_dict = load_tab_card(schema_name,conn_str)
     print(table_card_dict)
     table_df = pd.DataFrame.from_dict(table_card_dict,orient='index')
@@ -128,21 +121,9 @@ def generate_join_graph(schema_name,encFileID,max_num_queries):
     SK = np.zeros((max_tables,max_tables,2)) # initialize Skewness Factor
     NC = np.zeros((max_tables,6)) # initialize Node Coordinates Matrix
 
-    queries = []
-    query_ids = []
-    input_dir_enc = os.fsencode(input_dir)
-    for file in os.listdir(input_dir_enc):
-        filename = os.fsdecode(file)
-        if filename.endswith(".sql"):
-            query_ids.append(filename)
-            with open(os.path.join(input_dir, filename)) as f:
-                file_lines = f.readlines()
-                file_content = []
-                for line in file_lines:
-                    if line.strip('\n').strip(' ') != '':
-                        file_content.append(line)
-                file_content=''.join(file_content)
-                queries.extend(['SELECT '+query for query in file_content.upper().split('SELECT ')[1:]])
+    # load input queries
+    input_dir = './input'
+    queries, query_ids = load_input_queries(input_dir)
     
     torchEncoding={}
     query_counter = 0
@@ -308,5 +289,5 @@ def generate_join_graph(schema_name,encFileID,max_num_queries):
         
 if __name__ == '__main__':
     generate_join_graph(schema_name='imdb',
-                        encFileID='id',
-                        max_num_queries=200)
+                        encFileID='job',
+                        max_num_queries=114)

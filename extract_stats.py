@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import json
 from db_util import load_db_schema
+from util import load_input_queries
 
 def gini(x):
     # (Warning: This is a concise implementation, but it is O(n**2)
@@ -196,13 +197,15 @@ def get_chi2_matrix(input_df, verbose=False):
     chi2_matrix_inv = pd.DataFrame(chi2_array_inv, columns = df_columns, index= df_columns)
     return chi2_matrix, chi2_matrix_inv
 
-def extractSampleInfo(schema_name, NUM_MAX_SEL, SAMPLE_SIZE, afterLP=True, max_num_queries = 1000000, encFileID = "_id"):
+def extractSampleInfo(schema_name, SAMPLE_SIZE, max_num_queries = 1000000, encFileID = "_id"):
+    schema_name=schema_name.upper()
 
     with open("conn_str", "r") as conn_str_f:
         conn_str = conn_str_f.read()
     table_dict = load_db_schema(schema_name,conn_str)
 
     internal_dir = './internal/'
+    samples_dir = './sample_data_{}_{}/'.format(schema_name.lower(),str(SAMPLE_SIZE))
 
     tables = list(table_dict.keys())
     print(table_dict)
@@ -210,47 +213,28 @@ def extractSampleInfo(schema_name, NUM_MAX_SEL, SAMPLE_SIZE, afterLP=True, max_n
     
     JoinAttractions = pd.read_csv(os.path.join(internal_dir,'JoinAttractions.csv'),header=0)
 
+    # check if the samples dir does not exist, perform the sampling
+    if not os.path.exists(samples_dir):
+        from db_sampler import sampleData
+        sampleData(schema_name = schema_name, # schema name
+                    SAMPLE_SIZE = 2000)
+
+    # load sample data
     table_datas = {}
     for table in tables:
         print(table)
         # Read csv files with "\" as escapechar and """ as quotechar. 
-        table_datas[table] = pd.read_csv('./sample_data_{}_{}/{}_sample.csv'.format(schema_name,str(SAMPLE_SIZE),table), escapechar="\\", index_col=False, header=0)
+        tab_path = os.path.join(samples_dir,'{}_sample.csv'.format(table))
+        table_datas[table] = pd.read_csv(tab_path, escapechar="\\", index_col=False, header=0)
 
-    schema_name=schema_name.upper()
     join_list = []
     for idx in range(len(JoinAttractions)):
         joinAttr = JoinAttractions.loc[idx]
-        left_tab = joinAttr.left_tab
         left_col = joinAttr.left_col
-        right_tab = joinAttr.right_tab
         right_col = joinAttr.right_col
-
-        # left_col='.'.join([schema_name,left_tab,left_col])
-        # print("left col",left_col)
-        # right_col='.'.join([schema_name,right_tab,right_col])
-        # print("right col",right_col)
         join_list.append([left_col, right_col])
 
-        # left_col = '.'.join(key.split('-'))
-        # for weight_idx in range(len(JoinAttractions[key][0])):
-        #     for jcol in range(len(JoinAttractions[key][1][weight_idx])):
-        #         right_col = '.'.join(JoinAttractions[key][1][weight_idx][jcol])
-        #         if [right_col, left_col] in join_list:
-        #             continue
-        #         else: 
-        #             join_list.append([left_col, right_col])
-    
-    # # construct header for predicate per table
-    # tabHeader = "query_id,"
-    # for table in tables:
-    #     table = table.split('.')[1]
-    #     tabHeader += table + ","
-    # tabHeader = tabHeader[:-1] + "\n"
-
     predPerTab_df = pd.DataFrame(columns=tables)
-
-    # predPerTab_file = open(internal_dir+'predPerTable_'+str(encFileID)+'.csv', 'w')
-    # predPerTab_file.write(tabHeader)
 
     gini_coef_file = open(internal_dir+'gini_coef_' +str(encFileID)+'.json', 'w')
     giniCoefDict = {}
@@ -285,30 +269,14 @@ def extractSampleInfo(schema_name, NUM_MAX_SEL, SAMPLE_SIZE, afterLP=True, max_n
         print("computing chi2matrix for table: ",table)
         _,chai2matrix = get_chi2_matrix(bucketize_df(table_datas[table])) 
         chai2matrixDict[table] = chai2matrix
-    # print("--------->tables",tables)
+        
     ################# Per-query stats extraction ################
 
-    from query_parser import parse_query
     from extract_join_attraction import get_query_join_preds
     
+    # load input queries
     input_dir = './input'
-    schema_name = 'imdb'
-    
-    queries = []
-    query_ids = []
-    input_dir_enc = os.fsencode(input_dir)
-    for file in os.listdir(input_dir_enc):
-        filename = os.fsdecode(file)
-        if filename.endswith(".sql"):
-            query_ids.append(filename)
-            with open(os.path.join(input_dir, filename)) as f:
-                file_lines = f.readlines()
-                file_content = []
-                for line in file_lines:
-                    if line.strip('\n').strip(' ') != '':
-                        file_content.append(line)
-                file_content=''.join(file_content)
-                queries.extend(['SELECT '+query for query in file_content.upper().split('SELECT ')[1:]])
+    queries, query_ids = load_input_queries(input_dir)
 
     query_counter = 0
     for idx,sql in enumerate(queries):
@@ -421,8 +389,6 @@ def extractSampleInfo(schema_name, NUM_MAX_SEL, SAMPLE_SIZE, afterLP=True, max_n
 
 if __name__ == '__main__':
     extractSampleInfo(schema_name = "imdb", # schema name
-                        NUM_MAX_SEL = 10, # numner of the most frequent values
                         SAMPLE_SIZE = 2000, # the size of the samples to be used
-                        afterLP = False, # whether to compute the stats after applying the local predicates or before them
-                        max_num_queries = 20000, # Specify the max number of queries to process
-                        encFileID="id")
+                        max_num_queries = 114, # Specify the max number of queries to process
+                        encFileID="job")

@@ -1,6 +1,5 @@
 ### ----------------------------------- v3 ----------------------------------- ###
-import re
-# from table_stats_parser import absoluteFilePaths
+from query_parser import parse_query
 
 # Helper function to return 'n' sized chunks from 'l'
 def chunks(l, n):
@@ -69,15 +68,17 @@ class ExplainParser:
         # print("")
         
         # Create a dictionary of table aliases
-        cut_text = op_statment.rsplit("FROM",-1)[1]
-        cut_text = cut_text.rsplit("WHERE",-1)[0]
-        cut_text = cut_text.replace('\n','')
-        # print("----------->",cut_text)
-        tab_raw = cut_text.split(',')
-        tab_alias_dic = {}
-        for line in tab_raw:
-            line = line.split(".")[1]
-            tab_alias_dic[str(line.split(" AS ")[1]).strip()] = str(line.split(" AS ")[0]).strip()
+        tab_alias_dic,_,_,_ = parse_query(op_statment)
+
+        # cut_text = op_statment.rsplit("FROM",-1)[1]
+        # cut_text = cut_text.rsplit("WHERE",-1)[0]
+        # cut_text = cut_text.replace('\n','')
+        # # print("----------->",cut_text)
+        # tab_raw = cut_text.split(',')
+        # tab_alias_dic = {}
+        # for line in tab_raw:
+        #     line = line.split(".")[1]
+        #     tab_alias_dic[str(line.split(" AS ")[1]).strip()] = str(line.split(" AS ")[0]).strip()
         # print("tab_alias_dic: ",tab_alias_dic)
         self.json['tab_alias_dic'] = tab_alias_dic
         # self.json['raw_sql'] = og_statment

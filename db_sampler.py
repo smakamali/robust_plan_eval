@@ -4,7 +4,7 @@ import shutil
 from db_util import load_db_schema,connect_to_db,close_connection_to_db
 
 def sampleData(schema_name, SAMPLE_SIZE):
-    target_path = "./sample_data_"+schema_name.lower()+"_"+str(SAMPLE_SIZE)
+    samples_dir = './sample_data_{}_{}/'.format(schema_name.lower(),str(SAMPLE_SIZE))
 
     with open("conn_str", "r") as conn_str_f:
         conn_str = conn_str_f.read()
@@ -15,13 +15,13 @@ def sampleData(schema_name, SAMPLE_SIZE):
 
     tables = list(table_dict.keys())
 
-    if not os.path.exists(target_path):
-        os.mkdir(target_path)
-        print("\n" + target_path + " Created...\n")
+    if not os.path.exists(samples_dir):
+        os.mkdir(samples_dir)
+        print("\n" + samples_dir + " Created...\n")
     else:
-        shutil.rmtree(target_path)
-        os.mkdir(target_path)
-        print("\n" + target_path + " Deleted and created again......\n")
+        shutil.rmtree(samples_dir)
+        os.mkdir(samples_dir)
+        print("\n" + samples_dir + " Deleted and created again......\n")
 
     ibm_db_conn, ibm_db_dbi_conn = connect_to_db(conn_str, verbose=True)
 
@@ -30,7 +30,8 @@ def sampleData(schema_name, SAMPLE_SIZE):
         sample_df = pd.read_sql(sql,ibm_db_dbi_conn)
         print(sample_df.head())
         
-        sample_df.to_csv(r'' + target_path + '/' + table + '_sample.csv', index = None, header=True)
+        tab_path = os.path.join(samples_dir,'{}_sample.csv'.format(table))
+        sample_df.to_csv(tab_path, index = None, header=True)
     
     _ = close_connection_to_db(ibm_db_conn)
 

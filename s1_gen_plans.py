@@ -1,32 +1,23 @@
 # ----------------------------- V2.2 ----------------------------------# 
-# Captures explain and guideline
-    # Note that quantifiers in the guidelines are numbered based on the order 
-    # in which they appear in the rewritten query. This can be arbitrary.
-    # To make the numbering non-arbitrary, we take the guideline 
-    # and relabel the quantifiers so that a predetermined
-    # numbering is used.
-    # This requires a method that transforms numbering based on order: original guidelines, to numbering based on table sizes: guideline templates. 
-    # This will be used when capturing the possible plan options and storing them along with the queries and hint sets used for guideline generation in glTemplateDF.
-    # A reverse transformation will be needed before using 
-    # the guidelines for execution.
+#  TODO: update plan_parser to properly extract table aliases -> DONE!
+#  TODO: abandon the idea of converting guidelines to templates. Instead only store alias_table_dict
 
-# Compiles each query with multiple hintsets each producing a guideline
-# Guidelines and hints are linked to the queries and stored in a dataframe
-# Captures number of joins (num_joins) and stores it along with the guideline templates, so that in labeling phase only relevant guideline templates are used. -> This is no longer needed. Keeping for now in case needed later.
-
-from explain_parser import ExplainParser as ep
-import pandas as pd
+import os
+import io
+import re
+import json
+import shutil
 import subprocess as sp
 from subprocess import Popen, PIPE
 import numpy as np
-import os
+import pandas as pd
 # the following line is needed only on windows
 # os.add_dll_directory('C:\\Program Files\\IBM\\SQLLIB\\clidriver\\bin')
 import ibm_db
 import ibm_db_dbi
-import io
-import shutil
-import re
+from explain_parser import ExplainParser as ep
+from util import load_input_queries
+from db_util import db2_explain, load_db_schema
 
 def connect_to_db(conn_str, verbose=False):
     # Establishes a connection to the database using the provided connection string. Returns the IBM DB2 connection and DBI connection objects.
@@ -161,31 +152,7 @@ def find_between(s, first, last ):
     except ValueError:
         return ""
 
-def load_db_schema(schema_name, conn_str):
-    # database using the provided schema name and connection string. It returns a dictionary where the keys are table names, and the values are lists of column names for each table.
-    table_dict = {}
-    ibm_db_conn, ibm_db_dbi_conn = connect_to_db(conn_str, verbose=True)
-    sql = "SELECT TABNAME FROM SYSCAT.TABLES WHERE TABSCHEMA=\'" + schema_name+"\' AND TYPE = 'T'"
-    table_list = pd.read_sql(sql,ibm_db_dbi_conn).values.flatten()
-    # print("table_list1",table_list)
-    tab_sizes = []
-    for table in table_list:
-        sql = "select count(*) from "+ schema_name +"."+table+";"
-        tab_size = pd.read_sql(sql,ibm_db_dbi_conn).values.flatten().tolist()[0]
-        tab_sizes.append(tab_size)
-    tab_sizes = np.array(tab_sizes)
-    # print("tab_sizes",tab_sizes)
-    # print(np.argsort(tab_sizes))
-    table_list = table_list[np.flip(np.argsort(tab_sizes))]
-    # print("table_list2",table_list)
-    for table in table_list:
-        sql = "Select trim(c.tabschema) || '.' || trim(c.tabname) || '.' || trim(c.colname) as column_name from syscat.columns c inner join syscat.tables t on t.tabschema = c.tabschema and t.tabname = c.tabname where t.type = 'T' and c.tabschema = \'" + schema_name + "\' and c.tabname = \'" + table + "\';"
-        columns = pd.read_sql(sql,ibm_db_dbi_conn).values.flatten().tolist()
-        table_dict[table] = columns
-    _ = close_connection_to_db(ibm_db_conn, verbose = True)
-    return table_dict
-
-def generateExplains(max_num_queries, schema_name, encFileID, queriesFile):
+def generateExplains(max_num_queries, schema_name, encFileID, input_dir):
     # Generates explain plans for SQL queries. It takes the maximum number of queries to process, the schema name, an encoding file ID, and a file containing the SQL queries. The function connects to the database, loads the table schema, and then generates explain plans for each query using different hint sets. It saves the explain plans and associated information to files and returns a Pandas DataFrame containing the generated explain plans.
 
     internalPath = './internal/'
@@ -206,123 +173,103 @@ def generateExplains(max_num_queries, schema_name, encFileID, queriesFile):
             ['db2 .opt set disable mgjn;\n', 'db2 .opt set disable hsjn;\n'],
             ['db2 .opt set disable mgjn;\n', 'db2 .opt set disable hsjn;\n','db2 .opt set disable iscan;\n'],
             ]
-    glTemplateDF = pd.DataFrame(columns = ['query_id','sql','hintset','num_joins','guideline','alias_template_dict','cost'])
+    glTemplateDF = pd.DataFrame(columns = ['query_id','sql','hintset','guideline','alias_template_dict','cost'])
 
     with open("./conn_str", "r") as conn_str_f:
         conn_str = conn_str_f.read()
     
     table_dict = load_db_schema(schema_name, conn_str)
-
-    id_table = {}
+    table_id = {}
     for idx,item in enumerate(list(table_dict.keys())):
-        id_table[idx] = item
-    table_id = key_value_swap(id_table)
+        table_id[item.split('.')[1]] = idx
 
     rc = sp.run('. ~/sqllib/db2profile', shell = True)
     rc = sp.run('~/db2cserv -d on', shell = True)
     rc = sp.run('db2stop force', shell = True)
     rc = sp.run('db2start', shell = True)
 
-    opt_plan_PATH = './optimizer_plans/'
-    if not os.path.exists(opt_plan_PATH):
-        os.mkdir(opt_plan_PATH)
-        print("\n" + opt_plan_PATH + " Created...\n")
+    opt_plan_path = './optimizer_plans/'
+    if not os.path.exists(opt_plan_path):
+        os.mkdir(opt_plan_path)
+        print("\n" + opt_plan_path + " Created...\n")
     else:
-        shutil.rmtree(opt_plan_PATH)
-        os.mkdir(opt_plan_PATH)
-        print("\n" + opt_plan_PATH + " Deleted and created again......\n")
+        shutil.rmtree(opt_plan_path)
+        os.mkdir(opt_plan_path)
+        print("\n" + opt_plan_path + " Deleted and created again......\n")
 
 
-    err_files_PATH = internalPath+'error_files'+encFileID
-    with open(err_files_PATH, 'w') as f:
+    err_files_path = os.path.join(internalPath,'error_files_{}'.format(encFileID))
+    with open(err_files_path, 'w') as f:
         f.write("Explain errors for "+ encFileID+"\n")
-    print("\n" + err_files_PATH + " Created...\n")
+    print("\n" + err_files_path + " Created...\n")
     
-    with open(queriesFile, "r") as qFile:
-        queries = qFile.readlines()
-    queries = [i for i in queries if i != '\n']
+    # load input queries
+    queries, query_ids = load_input_queries(input_dir)
+
     counter = 0
     query_success_id=0
     guide_success_id=0
-    
-    ibm_db_conn, ibm_db_dbi_conn = connect_to_db(conn_str)
 
-    for i in queries:
-        line = i.strip('\n')
+    for idx,i in enumerate(queries):
+        line = i.replace('\n',' ')
+        query_id = query_ids[idx].split('.')[0]
+        print("query_id:",query_id)
+        print(i)
         # print(line)
-        if "SELECT" in line and counter < max_num_queries:
+        if counter < max_num_queries:
             # count number of joins in the query
-            num_joins = line.count('JOIN')
             print("processing query", counter+1, "out of", max_num_queries)
             
             minOneSuccess = False
             opt_plan_success = False
             counter+=1
             for hintidx, hintset in enumerate(histSets):
-                command='db2 connect to tpcds;\n'
-                command+='db2 .opt set enable nljn;\n'
-                command+='db2 delete from systools.explain_instance;\n'
-                # for hint in hintset: # replace with .join
-                #     command+=hint
-                command += ''.join(hintset)
-                guidlineFile = opt_plan_PATH+'query#' + str(query_success_id) + '-' + str(hintidx) + 'guide'
-                command+= 'db2 .opt set lockplan on my.guideline;\n'
-                command+='db2 \"explain plan for ' + line + ';\"\n'
-                exp_name = opt_plan_PATH+'query#' + str(query_success_id) + '-' + str(hintidx) + '.ex'
-                command+='db2 .opt set lockplan off;\n'
-                command+= 'cp ~/sqllib/my.guideline '+guidlineFile+'\n'
+                print("Hint Set:",hintset)
+
                 if hintidx == 0:
-                    command+='db2exfmt -d tpcds -1 -o ' + exp_name + ";\n"
-                commands = command.split('\n')
-                # for cmd in commands:
-                    # print('>> ',cmd)
-                process = Popen( "/bin/bash", shell=False, universal_newlines=True,
-                    stdin=PIPE, stdout=PIPE, stderr=PIPE)
-                output, _ = process.communicate(command)
-                # print(output)
+                    gen_exp_output = True
+                else:
+                    gen_exp_output = False
+
+                exp_name, guidlineFile, plan_cost = db2_explain(schema_name='imdb', sql=line, query_id=query_id, hintset=hintset, hintset_id=hintidx,opt_plan_path=opt_plan_path,gen_exp_output=gen_exp_output, gen_guideline=True, return_cost=True, conn_str=conn_str,cmd_verbose=True)
 
                 if hintidx == 0:
                     try:
                         data = ep(open(exp_name, 'r').read()).parse()
                         tab_alias_dict = data['tab_alias_dic']
+                        print("tab_alias_dict",tab_alias_dict)
                         opt_plan_success = True
                     except(TypeError):
-                        with open(err_files_PATH, 'a') as err:
+                        with open(err_files_path, 'a') as err:
                             print(exp_name, '............. Type Error Exception', TypeError)
-                            err.write(exp_name + ' Type Error! \n')
+                            err.write(query_id+'\n'+line+'\n'+exp_name + ' Type Error! \n')
                     except(IndexError):
                         print(exp_name,'............. Index Error Exception', IndexError)
-                        with open(err_files_PATH, 'a') as err:
-                            err.write(exp_name + ' Index Error! \n')
+                        with open(err_files_path, 'a') as err:
+                            err.write(query_id+'\n'+line+'\n'+exp_name + ' Index Error! \n')
                     except(FileNotFoundError):
                         print(exp_name,'............. FileNotFoundError Exception', FileNotFoundError)
-                        with open(err_files_PATH, 'a') as err:
-                            err.write(exp_name + ' FileNotFound Error! \n')
+                        with open(err_files_path, 'a') as err:
+                            err.write(query_id+'\n'+line+'\n'+exp_name + ' FileNotFound Error! \n')
                     except:
                         pass
-                
-                # extract plan cost
-                sql = "select total_cost from systools.explain_operator where operator_type = 'RETURN'"
-                plan_cost = pd.read_sql(sql,ibm_db_dbi_conn).values.squeeze()
-                # print('plan_cost',plan_cost)
 
-                if opt_plan_success and plan_cost != '[]':
+                if opt_plan_success:
                     with open(guidlineFile,'r') as f:
                         origGuide = f.read()
                         origGuide = find_between(origGuide, '<OPTGUIDELINES>', '</OPTGUIDELINES>').replace('\n','').replace('\t','')
-                        
-                        # print("----> hintset",hintset)
-                        # print("origGuide ---------> ",origGuide)
-                        newGuide, alias_template_dict = transformGuideline(origGuide, tab_alias_dict, table_id)
-                        # print("newGuide ---------> ",newGuide)
-                    
+                        print("Guideline",origGuide)
+                                            
                     # write the sql, hint set, guideline template, guideline, cost to a dataframe
-                    glTemplateDF = glTemplateDF.append({'query_id':query_success_id,'sql':line,'hintset':''.join(hintset),
-                                                        'num_joins':num_joins,'guideline': newGuide,
-                                                        'alias_template_dict':alias_template_dict,
-                                                        'cost':plan_cost}, ignore_index=True)
+                    new_row = {'query_id':[query_id],'sql':[line],
+                               'hintset':[''.join(hintset)],'guideline': [origGuide],
+                               'alias_template_dict':[json.dumps(tab_alias_dict)],
+                               'cost':plan_cost}
+                    glTemplateDF = pd.concat([glTemplateDF,pd.DataFrame(new_row)],ignore_index=True)
                     
                     minOneSuccess = True
+                
+                    guide_success_id+=1
             
             if minOneSuccess:
                 query_success_id+=1
@@ -332,29 +279,26 @@ def generateExplains(max_num_queries, schema_name, encFileID, queriesFile):
 
         if query_success_id%100:
             # checkpoint - write to disk
-            glTemplateDF.to_pickle(internalPath+'query_hint_gl_'+encFileID+'.pickle')
+            glTemplateDF.to_pickle(os.path.join(internalPath,'query_hint_gl_{}.pickle'.format(encFileID)))
 
         if query_success_id%10:
             # delete dump files: '/home/db2inst1/sqllib/db2dump/DIAG0000/FODC_AppErr_*'
-            command = 'sudo rm -r -f ~/sqllib/db2dump/DIAG0000/FODC_AppErr_*'
+            cmd = 'rm -r -f ~/sqllib/db2dump/DIAG0000/FODC_AppErr_*'
             process = Popen( "/bin/bash", shell=False, universal_newlines=True,
                         stdin=PIPE, stdout=PIPE, stderr=PIPE)
-            output, _ = process.communicate(command)
-
-    _ = close_connection_to_db(ibm_db_conn, verbose = True)
+            output, _ = process.communicate(cmd)
 
     # final write to disk
-    glTemplateDF.to_pickle(internalPath+'query_hint_gl_'+encFileID+'.pickle')
-    
+    glTemplateDF.to_pickle(os.path.join(internalPath,'query_hint_gl_{}.pickle'.format(encFileID)))
+
     print("****Processing all explains is done!****")
     print(counter, "queries were processes.")
     print(query_success_id, "queries had at least one valid guideline.")
     print(guide_success_id, "explains were created successfully.")
-    print("Number of guideline templates generated: ",len(glTemplateDF.guideline.values.tolist()))
     print()
 
 if __name__ == '__main__':
-    generateExplains(max_num_queries = 10, # Specify the max number of queries to explain
-                    schema_name = 'TPCDS', # schema name
-                    encFileID = "1-4j_0-2extjp_2-5lp_tmp",
-                    queriesFile = "./input/input_queries.sql")
+    generateExplains(max_num_queries = 114, # Specify the max number of queries to explain
+                    schema_name = 'imdb', # schema name
+                    encFileID = "job", # a unique id for the dataset
+                    input_dir = "./input") # the directory that contains query.sql file(s)

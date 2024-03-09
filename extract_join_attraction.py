@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 from query_parser import parse_query
 from db_util import load_pkfk
+from util import load_input_queries
 
 
 
@@ -65,30 +66,19 @@ def get_query_join_preds(schema_name,sql,verbose=False):
 
 def get_all_join_attr(schema_name):
 
-    input_dir = './input'
     schema_name=schema_name.upper()
+
     with open("conn_str", "r") as conn_str_f:
         conn_str = conn_str_f.read()
 
+    # load referentil integrity joins
     JoinAttractions = load_pkfk(schema_name,conn_str)
     JoinAttractions.columns=["left_sch","left_tab","left_col","right_sch","right_tab","right_col"]
     JoinAttractions['op'] = ' = '
 
-    queries = []
-    query_ids = []
-    input_dir_enc = os.fsencode(input_dir)
-    for file in os.listdir(input_dir_enc):
-        filename = os.fsdecode(file)
-        if filename.endswith(".sql"):
-            query_ids.append(filename)
-            with open(os.path.join(input_dir, filename)) as f:
-                file_lines = f.readlines()
-                file_content = []
-                for line in file_lines:
-                    if line.strip('\n').strip(' ') != '':
-                        file_content.append(line)
-                file_content=''.join(file_content)
-                queries.extend(['SELECT '+query for query in file_content.upper().split('SELECT ')[1:]])
+    # load input queries
+    input_dir = './input'
+    queries, query_ids = load_input_queries(input_dir)
 
     internal_dir = './internal'
 

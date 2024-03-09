@@ -1,10 +1,9 @@
 import os
 from subprocess import Popen, PIPE
+import numpy as np
 import pandas as pd
 import ibm_db
 import ibm_db_dbi
-
-
 
 def connect_to_db(conn_str, verbose=False):
     try:
@@ -60,15 +59,20 @@ connect reset;""".format(schema_name)
     print(output)
 
 def load_db_schema(schema_name, conn_str):
+        # database using the provided schema name and connection string. It returns a dictionary where the keys are table names, and the values are lists of column names for each table.
     schema_name=schema_name.upper()
-    table_dict = {}
     ibm_db_conn, ibm_db_dbi_conn = connect_to_db(conn_str, verbose=True)
-    sql = "SELECT TABNAME FROM SYSCAT.TABLES WHERE TABSCHEMA=\'" + schema_name+"\' AND TYPE = 'T'"
-    table_list = pd.read_sql(sql,ibm_db_dbi_conn).values.flatten().tolist()
+
+    tab_card_dict = load_tab_card(schema_name, conn_str)
+    table_list = np.array(list(tab_card_dict.keys()))
+    tab_sizes = np.array([int(tab_card_dict[tab]) for tab in tab_card_dict])
+    table_list = table_list[np.flip(np.argsort(tab_sizes))]
+
+    table_dict = {}
     for table in table_list:
-        sql = "Select trim(c.tabschema) || '.' || trim(c.tabname) || '.' || trim(c.colname) as column_name from syscat.columns c inner join syscat.tables t on t.tabschema = c.tabschema and t.tabname = c.tabname where t.type = 'T' and c.tabschema = \'" + schema_name + "\' and c.tabname = \'" + table + "\';"
+        sql = "Select trim(c.tabschema) || '.' || trim(c.tabname) || '.' || trim(c.colname) as column_name from syscat.columns c inner join syscat.tables t on t.tabschema = c.tabschema and t.tabname = c.tabname where t.type = 'T' and c.tabschema = \'" + table.split('.')[0] + "\' and c.tabname = \'" + table.split('.')[1] + "\';"
         columns = pd.read_sql(sql,ibm_db_dbi_conn).values.flatten().tolist()
-        table_dict[schema_name+'.'+table] = columns
+        table_dict[table] = columns
     _ = close_connection_to_db(ibm_db_conn, verbose = True)
     return table_dict
 
@@ -89,7 +93,7 @@ def load_tab_card(schema_name, conn_str):
 def load_col_types(schema_name, conn_str):
     schema_name=schema_name.upper()
     ibm_db_conn, ibm_db_dbi_conn = connect_to_db(conn_str, verbose=True)
-    sql = "select tbcreator, tbname, name, coltype from sysibm.syscolumns where tbcreator not like 'SYS%';"
+    sql = "select tbcreator, tbname, name, coltype from sysibm.syscolumns where tbcreator = \'{}\';".format(schema_name)
     column_types = pd.read_sql(sql,ibm_db_dbi_conn)
     _ = close_connection_to_db(ibm_db_conn, verbose = True)
     return column_types
@@ -111,4 +115,130 @@ def load_freq_vals(schema_name, conn_str):
     _ = close_connection_to_db(ibm_db_conn, verbose = True)
     return freq_vals
 
+
+# A function to explain query plans, and optionally generate explain outputs and/or guidelines
+# inputs:
+    # query
+    # query_id
+    # hints: a list containing a set of hints
+    # gen_exp_output: whether to generate an explain output
+    # opt_plan_path: a path to store the explain outputs and guidelines
+    # gen_guideline: whether to generate guidelines
+    # cmd_verbose: whether to print outputs from the executed commands
+# generates 
+def db2_explain(schema_name,sql,query_id,
+    hintset=None, hintset_id=None,
+    opt_plan_path='optimizer_plans', gen_exp_output=False, 
+    gen_guideline=False, return_cost = False, conn_str=None, cmd_verbose=False):
     
+    if hintset_id is None and gen_guideline:
+        hintset_id = 'defualt'
+
+    if not os.path.isdir(opt_plan_path):
+        os.mkdir(opt_plan_path)
+    file_path = os.path.join(opt_plan_path,'temp.sql')
+
+    stmt= "explain plan for {}\n".format(sql)
+    with open(file_path,'w') as f:
+        f.write(stmt)
+    
+    cmd='db2 connect to {};\n'.format(schema_name)
+    cmd+='db2 set current schema {};\n'.format(schema_name)
+    cmd+='db2 .opt set enable nljn;\n'
+    cmd+='db2 delete from systools.explain_instance;\n'
+    cmd+='db2 commit;\n'
+    
+    if isinstance(hintset,list):
+        cmd += ''.join(hintset)
+    elif isinstance(hintset,str):
+        cmd += hintset
+    
+    if gen_guideline:
+        cmd+= 'db2 .opt set lockplan on my.guideline;\n'
+
+    cmd+='db2 -tvf {};\n'.format(file_path)
+
+    if gen_guideline:
+        guidlineFile = os.path.join(opt_plan_path,'query#{}-{}guide'.format(query_id,hintset_id))
+        cmd+='db2 .opt set lockplan off;\n'
+        cmd+= 'cp ~/sqllib/my.guideline {}\n'.format(guidlineFile)
+
+    if gen_exp_output:
+        exp_name = os.path.join(opt_plan_path,'query#{}.ex'.format(query_id))
+        cmd+='db2exfmt -d {} -1 -o {};\n'.format(schema_name, exp_name)
+
+    cmd+='connect reset;\n'
+    
+    process = Popen( "/bin/bash", shell=False,
+                    universal_newlines=True,
+                    stdin=PIPE, stdout=PIPE, stderr=PIPE)
+    
+    output,_ = process.communicate(cmd)
+    
+    if cmd_verbose:
+        cmds = cmd.split('\n')
+        for cmd in cmds:
+            print('>> ',cmd)
+        print(output)
+
+    if return_cost:
+        plan_cost = get_last_plan_cost(conn_str)
+
+    result =[]
+
+    if gen_exp_output:
+        result.append(exp_name)
+    else:
+        result.append(None)
+    if gen_guideline:
+        result.append(guidlineFile)
+    else:
+        result.append(None)
+    if return_cost:
+        result.append(plan_cost)
+    else:
+        result.append(None)
+
+    return tuple(result)
+    
+def get_last_plan_cost(conn_str):
+
+    if conn_str is None:
+        with open("conn_str", "r") as conn_str_f:
+            conn_str = conn_str_f.read()
+
+    ibm_db_conn, ibm_db_dbi_conn = connect_to_db(conn_str)
+
+    sql = "select total_cost from systools.explain_operator where operator_type = 'RETURN'"
+    
+    plan_cost = pd.read_sql(sql,ibm_db_dbi_conn).values.squeeze()
+    _=close_connection_to_db(ibm_db_conn)
+
+    return plan_cost
+
+def get_card_sel(conn_str):
+
+    ibm_db_conn, ibm_db_dbi_conn = connect_to_db(conn_str, verbose=False)
+
+    exp_sql = """
+    SELECT EO.OPERATOR_ID, 
+        EO.OPERATOR_TYPE,
+        ESI.STREAM_COUNT AS INPUT_CARD, 
+        ESO.STREAM_COUNT AS OUTPUT_CARD, 
+        EO.TOTAL_COST, 
+        ESI.OBJECT_NAME AS INPUT_OBJECT
+    FROM SYSTOOLS.EXPLAIN_OPERATOR AS EO 
+        LEFT OUTER JOIN SYSTOOLS.EXPLAIN_STREAM AS ESI 
+        ON ESI.TARGET_ID = EO.OPERATOR_ID
+        LEFT OUTER JOIN SYSTOOLS.EXPLAIN_STREAM AS ESO 
+        ON ESO.SOURCE_ID = EO.OPERATOR_ID
+    WHERE EO.OPERATOR_TYPE IN ('TBSCAN','FETCH')
+        AND ESI.OBJECT_NAME <> '-';
+        """
+
+    exp_res = pd.read_sql(exp_sql,ibm_db_dbi_conn)
+    exp_res["SELECTIVITY"] = exp_res.OUTPUT_CARD/exp_res.INPUT_CARD
+    
+    _ = close_connection_to_db(ibm_db_conn, verbose = False)
+
+    return exp_res[["INPUT_OBJECT","INPUT_CARD","OUTPUT_CARD","SELECTIVITY"]]
