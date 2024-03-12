@@ -1,9 +1,13 @@
 import os
+import fcntl
 from subprocess import Popen, PIPE
+import time
 import numpy as np
 import pandas as pd
 import ibm_db
 import ibm_db_dbi
+import subprocess as sp
+from util import find_between
 
 def connect_to_db(conn_str, verbose=False):
     try:
@@ -115,6 +119,32 @@ def load_freq_vals(schema_name, conn_str):
     _ = close_connection_to_db(ibm_db_conn, verbose = True)
     return freq_vals
 
+def db_result(statement):
+    # Executes a DB2 statement and writes the result to a file named 'db2_dmp'. It returns the lines of the result file.
+    with open('./db2_tmp', 'w') as f:
+        f.write(statement)
+    rc = sp.run('db2 -tvf ./db2_tmp | cat > db2_dmp', shell = True)
+    rc = sp.run('rm ./db2_tmp', shell = True)
+    with open('./db2_dmp', 'r') as f:
+        lines = f.readlines()
+    return lines
+
+def db2_execute(sql,ibm_db_conn,guieline=None,
+    def_timeout_threshold = 100):
+        
+    # add guideline to raw_sql
+    sql = sql +' /* '+ guieline + ' */;'
+
+    stmt = ibm_db.prepare(ibm_db_conn, sql)
+    rc = ibm_db.set_option(stmt, {ibm_db.SQL_ATTR_QUERY_TIMEOUT : def_timeout_threshold}, 0)
+    
+    tic = time.time()
+    _ = ibm_db.execute(stmt)
+    toc = time.time()
+
+    latency = toc-tic
+
+    return latency
 
 # A function to explain query plans, and optionally generate explain outputs and/or guidelines
 # inputs:
@@ -164,7 +194,7 @@ def db2_explain(schema_name,sql,query_id,
         cmd+= 'cp ~/sqllib/my.guideline {}\n'.format(guidlineFile)
 
     if gen_exp_output:
-        exp_name = os.path.join(opt_plan_path,'query#{}.ex'.format(query_id))
+        exp_name = os.path.join(opt_plan_path,'query#{}-{}.ex'.format(query_id, hintset_id))
         cmd+='db2exfmt -d {} -1 -o {};\n'.format(schema_name, exp_name)
 
     cmd+='connect reset;\n'
@@ -191,7 +221,10 @@ def db2_explain(schema_name,sql,query_id,
     else:
         result.append(None)
     if gen_guideline:
-        result.append(guidlineFile)
+        with open(guidlineFile,'r') as f:
+            guideline = f.read()
+            guideline = find_between(guideline, '<OPTGUIDELINES>', '</OPTGUIDELINES>').replace('\n','').replace('\t','')
+        result.append(guideline)
     else:
         result.append(None)
     if return_cost:

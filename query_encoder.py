@@ -1,12 +1,9 @@
-# TODO: 
-    # can replace the following code block used to create id_tab with the new dbutil.load_db_schema
-
 import os
 import json
 import numpy as np
 import pandas as pd
 from extract_join_attraction import get_query_join_preds
-from db_util import load_tab_card
+from db_util import load_db_schema
 from util import load_input_queries
 
 def encodeOps (ops):
@@ -67,22 +64,13 @@ def generate_join_graph(schema_name,encFileID,max_num_queries):
     # join_attractions = pd.read_csv(os.path.join(internal_dir,'JoinAttractions.csv'),header=0)
     # print(join_attractions)
 
-    # TODO: can replace the following code block with the new dbutil.load_db_schema
-    table_card_dict = load_tab_card(schema_name,conn_str)
-    print(table_card_dict)
-    table_df = pd.DataFrame.from_dict(table_card_dict,orient='index')
-    table_df.reset_index(inplace=True)
-    table_df.sort_values(by=0,ascending=False,inplace=True)
-    table_df.reset_index(inplace=True,drop=True)
-    table_df.reset_index(inplace=True)
-    table_df.columns=['tab_idx','table','card']
+    id_tab = {}
+    table_col_dict = load_db_schema(schema_name, conn_str)
+    for idx, key in enumerate(table_col_dict.keys()):
+        id_tab[key] = idx
 
-    print(table_df)
 
-    id_tab={}
-    for idx in range(len(table_df)):
-        id_tab[table_df.iloc[idx].table] = table_df.iloc[idx].tab_idx
-
+    
     print(id_tab)
 
     max_tables = len(id_tab)
@@ -290,4 +278,4 @@ def generate_join_graph(schema_name,encFileID,max_num_queries):
 if __name__ == '__main__':
     generate_join_graph(schema_name='imdb',
                         encFileID='job',
-                        max_num_queries=114)
+                        max_num_queries=5)

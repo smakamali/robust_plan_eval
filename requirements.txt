@@ -4,3 +4,6 @@ ibm-db
 scikit-learn
 scipy
 sqlglot
+torch
+torchvision
+torchaudio

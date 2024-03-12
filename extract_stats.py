@@ -2,6 +2,7 @@ import os
 import numpy as np
 import pandas as pd
 import json
+import pickle
 from db_util import load_db_schema
 from util import load_input_queries
 
@@ -245,23 +246,18 @@ def extractSampleInfo(schema_name, SAMPLE_SIZE, max_num_queries = 1000000, encFi
     correlations_file = open(internal_dir+'correlations_' +str(encFileID)+'.json', 'w')
     correlationsDict = {}
 
-    joinIncs_file = open(internal_dir+'joinIncs_' +str(encFileID)+'.json', 'w')
-
-    joinTypes_file = open(internal_dir+'joinTypes_' +str(encFileID)+'.json', 'w')
-
-    joinFactors_file = open(internal_dir+'joinFactors_' +str(encFileID)+'.json', 'w')
-
     predCountDF = pd.DataFrame(columns = ["lpCount", "ddPreds", "multiPreds", "cyclic", "selfJoin", "eqJoinPreds", "rangeJoinPreds"])
     predCountDF.index.name = "query_id"
 
     # get inclusion measures and join types for all joins and store as json files
     joinIncsDict, joinTypesDict, joinFatorsDict = join_profile(join_list, table_datas, SAMPLE_SIZE)
-    json.dump(joinIncsDict, joinIncs_file)
-    json.dump(joinTypesDict, joinTypes_file)
-    json.dump(joinFatorsDict, joinFactors_file)
-    joinIncs_file.close()
-    joinTypes_file.close()
-    joinFactors_file.close()
+
+    with open(os.path.join(internal_dir,'joinIncs_{}.json'.format(str(encFileID))), 'w') as f:
+        json.dump(joinIncsDict, f)
+    with open(os.path.join(internal_dir,'joinTypes_{}.json'.format(str(encFileID))), 'w') as f:
+        json.dump(joinTypesDict, f)
+    with open(os.path.join(internal_dir,'joinFactors_{}.json'.format(str(encFileID))), 'w') as f:
+        json.dump(joinFatorsDict, f)
 
     # get correlation matrix for all tables
     chai2matrixDict = {}
@@ -269,6 +265,11 @@ def extractSampleInfo(schema_name, SAMPLE_SIZE, max_num_queries = 1000000, encFi
         print("computing chi2matrix for table: ",table)
         _,chai2matrix = get_chi2_matrix(bucketize_df(table_datas[table])) 
         chai2matrixDict[table] = chai2matrix
+        
+    # chai2matrixDict is stored as a part of db stats
+    with open(os.path.join(internal_dir,'chai2matrixDict_{}.pickle'.format(str(encFileID))), 'wb') as f:
+        pickle.dump(chai2matrixDict, f)
+    
         
     ################# Per-query stats extraction ################
 
