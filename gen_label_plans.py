@@ -1,5 +1,7 @@
 ############ LOAD QUERIES, COMPILE AND LABEL PLANS #############
 
+#  TODO: automate sample collection 
+
 import os
 import shutil
 import subprocess as sp
@@ -135,12 +137,13 @@ if __name__ == '__main__':
         max_num_queries = 114, # Specify the max number of queries to explain
         schema_name = 'imdb', # schema name
         encFileID = "job_main", # a unique id for the dataset
-        conn_str_path = './conn_str',
+        conn_str_path = './conn_str', # path to the file containing a connection string to the database
         input_dir = "./input/", # the directory that contains query.sql file(s)
-        opt_plan_path = './job_main_plans/',
-        internal_dir = './internal/',
-        sample_size=2000,
-        timeout_thr=10, 
-        dynamic_timeout=False, 
-        dynamic_timeout_factor=5) 
+        opt_plan_path = './job_main_plans/', # the path used to store explain outputs and guidelines
+        internal_dir = './internal/', # the path to store intermediary files
+        sample_size = 2000, # number of samples used per table
+        timeout_thr = 10, # timeout threshold to avoid long running query/plans 
+        dynamic_timeout = False, # determines whether dynamic timeout is used 
+        dynamic_timeout_factor = 5 # determines the multiplier for the dynamic timeout with respect to the optimizer's plan as a baseline, used only when `dynamic_timeout = True`
+        )
     
