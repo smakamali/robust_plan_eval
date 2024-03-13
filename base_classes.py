@@ -1,6 +1,5 @@
-# TODO: create a function to capture all db stats. If the stats do not exit the query class initialization can call the function to collect them
-# TODO: if possible, switch to SQLAlchemy for connecting to Db2
-# --> TODO: create an script for compiling and executing queries and plans, and collecting the data -> account for caching
+# TODO: if possible, switch to SQLAlchemy for using pandas to fetch results from Db2
+# TODO: what if explain fails?
 
 import os
 import numpy as np
@@ -15,15 +14,10 @@ from explain_parser import ExplainParser as explain_parser
 
 #####################   QUERY CLASS   #####################
 
-optimizer_plan_path = './optimizer_plans/'
-conn_str_path = './conn_str'
-internal_dir = './internal/'
-
-
-def get_default_plan(sql,q_id,schema_name,conn_str):
+def get_default_plan(sql,q_id,schema_name,conn_str,opt_plan_path):
     schema_name=schema_name.upper()
 
-    exp_path,guideline,plan_cost=db2_explain(schema_name,sql,query_id=q_id,opt_plan_path=optimizer_plan_path,gen_exp_output=True,gen_guideline=True, return_cost=True,cmd_verbose=False, conn_str=conn_str)
+    exp_path,guideline,plan_cost=db2_explain(schema_name,sql,query_id=q_id,opt_plan_path=opt_plan_path,gen_exp_output=True,gen_guideline=True, return_cost=True,cmd_verbose=False, conn_str=conn_str)
     
     res = get_card_sel(conn_str)
 
@@ -290,26 +284,33 @@ def query_encoder(schema_name, max_tables, base_sels, base_cards, pred_count, gi
     return pyG_encoding
 
 class Query:
-    def __init__(self, schema, sql, q_id, encFileID):
+    def __init__(self, schema, sql, q_id, encFileID, conn_str_path = './conn_str', input_dir = './input/', opt_plan_path = './optimizer_plans/', internal_dir = './internal/', sample_size = 2000, verbose=False):
         self.schema = schema
         self.sql = sql
         self.q_id = q_id
         self.encFileID = encFileID
+        self.conn_str_path = conn_str_path
+        self.input_dir = input_dir
+        self.opt_plan_path = opt_plan_path
         self.internal_dir = internal_dir
+        self.sample_size = sample_size
+        self.verbose = verbose
         self.plans = {}
 
     def parse(self):
         self.tables_dict,self.join_preds,self.local_preds,self.pred_cols= get_query_join_preds(self.schema,self.sql)
-        print ("parsed data stored in `tables_dict`, `join_preds`, `local_preds`, and `pred_cols` attributes.")
+        if self.verbose:
+            print (">>> parsed data stored in `tables_dict`, `join_preds`, `local_preds`, and `pred_cols` attributes.")
     
     def default_compile(self):
 
-        with open(conn_str_path, "r") as conn_str_f:
+        with open(self.conn_str_path, "r") as conn_str_f:
             conn_str = conn_str_f.read()
 
         # get the default plan
-        exp_path, guideline, plan_cost, self.sel, self.card= get_default_plan(self.sql,self.q_id,self.schema,conn_str)
-        print ("cardinaities and selectivities stored in `card` and `sel` attributes.")
+        exp_path, guideline, plan_cost, self.sel, self.card= get_default_plan(self.sql,self.q_id,self.schema,conn_str,self.opt_plan_path)
+        if self.verbose:
+            print (">>> cardinaities and selectivities stored in `card` and `sel` attributes.")
         
         # parse the explain to get the mapping between aliases used in the guidelines and the table names
         parsed_exp = explain_parser(open(exp_path,'r').read()).parse()
@@ -323,26 +324,35 @@ class Query:
             explain_path=exp_path,guideline=guideline,
             cost=plan_cost,
             tab_alias_dict=self.tab_alias_dict,
-            # id_tab=self.id_tab
             )
         
+    def ext_sample_info(self,force_recollect=False):
 
-    def ext_sample_info(self):
+        join_inc_path = os.path.join(self.internal_dir,'joinIncs_{}.json'.format(str(self.encFileID)))
+        join_type_path = os.path.join(self.internal_dir,'joinTypes_{}.json'.format(str(self.encFileID)))
+        join_factor_path = os.path.join(self.internal_dir,'joinFactors_{}.json'.format(str(self.encFileID)))
+        chai2_matrix_path = os.path.join(self.internal_dir,'chai2matrixDict_{}.pickle'.format(str(self.encFileID)))
 
-        with open(conn_str_path, "r") as conn_str_f:
+        with open(self.conn_str_path, "r") as conn_str_f:
             conn_str = conn_str_f.read()
 
+        # db stats are only collected if they do not exist or if `force_recollect = True`
+        if not (os.path.isfile(join_inc_path) and os.path.isfile(join_type_path) and os.path.isfile(join_factor_path) and os.path.isfile(chai2_matrix_path)) or force_recollect:
+
+            from get_db_stats import get_db_stats
+            get_db_stats(schema_name=self.schema, input_dir=self.input_dir, internal_dir=self.internal_dir, SAMPLE_SIZE=self.sample_size, encFileID=self.encFileID)
+
         # load all db stats
-        with open(os.path.join(self.internal_dir,'joinIncs_{}.json'.format(str(self.encFileID))), 'r') as f:
+        with open(join_inc_path, 'r') as f:
             self.joinIncsDict = json.load(f)
 
-        with open(os.path.join(self.internal_dir,'joinTypes_{}.json'.format(str(self.encFileID))), 'r') as f:
+        with open(join_type_path, 'r') as f:
             self.joinTypesDict = json.load(f)
 
-        with open(os.path.join(self.internal_dir,'joinFactors_{}.json'.format(str(self.encFileID))), 'r') as f:
+        with open(join_factor_path, 'r') as f:
             self.joinFactorsDict = json.load(f)
         
-        with open(os.path.join(self.internal_dir,'chai2matrixDict_{}.pickle'.format(str(self.encFileID))), 'rb') as f:
+        with open(chai2_matrix_path, 'rb') as f:
             self.chai2matrixDict = pickle.load(f)
 
         self.pred_count,self.correlationsDict,self.giniCoefDict,self.cardToColDict, self.id_tab, self.jpDF = ext_sample_info(self.schema,self.encFileID,self.tables_dict,self.join_preds,self.local_preds,self.pred_cols,self.chai2matrixDict, conn_str)
@@ -351,20 +361,21 @@ class Query:
     def encode(self):
         self.parse()
         # only needed if the default plan does not exist
+        # assumes the id for the default plan is 0
         if 0 not in self.plans.keys():
             self.default_compile()
+
         self.ext_sample_info()
         self.pyG_encoding = query_encoder(self.schema, self.max_tables, self.sel, self.card, self.pred_count, self.giniCoefDict, self.cardToColDict, self.correlationsDict, self.joinIncsDict, self.joinTypesDict, self.joinFactorsDict, self.tables_dict, self.jpDF, self.id_tab)
 
     def compile(self,hintset,hintset_id,gen_exp_output):
-        with open(conn_str_path, "r") as conn_str_f:
+        with open(self.conn_str_path, "r") as conn_str_f:
             conn_str = conn_str_f.read()
 
-        # get the plan
-        exp_path,guideline,plan_cost=db2_explain(self.schema,self.sql,self.q_id,hintset=hintset,hintset_id=hintset_id,opt_plan_path=optimizer_plan_path,gen_exp_output=gen_exp_output,gen_guideline=True, return_cost=True,cmd_verbose=False, conn_str=conn_str)
+        # compile the plan
+        exp_path,guideline,plan_cost=db2_explain(self.schema,self.sql,self.q_id,hintset=hintset,hintset_id=hintset_id,opt_plan_path=self.opt_plan_path,gen_exp_output=gen_exp_output,gen_guideline=True, return_cost=True,cmd_verbose=self.verbose, conn_str=conn_str)
         
-        # store the plan
-        # if hintset_id not in self.plans.keys():
+        # create a Plan object and assign it to the Query
         self.plans[hintset_id] = Plan(
             q_id=self.q_id,
             query=self.sql,
@@ -374,24 +385,26 @@ class Query:
             tab_alias_dict=self.tab_alias_dict,
             id_tab=self.id_tab
             )
-        # else:
-        #     print('')
-        #     print("===========> The default plan already exists <===========")
-        #     print('')
 
-    def execute(self,hintset,hintset_id,ibm_db_conn,timeout_thr=100):
+    def execute(self,hintset,hintset_id,ibm_db_conn,timeout_thr=100, exec_verbose=False):
         
         if hintset_id not in self.plans.keys():
             self.compile(hintset,hintset_id,False)
 
-        latency = db2_execute(self.sql,ibm_db_conn, self.plans[hintset_id].guideline,timeout_thr)
+        latency,errorMsg = db2_execute(self.sql,ibm_db_conn, self.plans[hintset_id].guideline,timeout_thr)
     
-        self.plans[hintset_id].latency=latency
+        self.plans[hintset_id].latency = latency
+        self.plans[hintset_id].error_msg = errorMsg
 
-        result = '\n'.join([self.q_id,self.sql,self.plans[hintset_id].guideline,''.join(hintset),str(latency)])
-        # print(self.q_id)
-        print("query result ---------> ",result)
-        return result
+        if latency >= timeout_thr:
+            self.plans[hintset_id].timed_out = True
+        else:
+            self.plans[hintset_id].timed_out = False
+            
+        if self.verbose or exec_verbose:
+            print("query {}, plan {}, latency: {}".format(str(self.q_id),str(hintset_id),str(latency)))
+        
+        return errorMsg
     
     def print(self):
         attributes = vars(self)
@@ -401,19 +414,20 @@ class Query:
 
 #####################   PLAN CLASS   #####################
 
-from tcnn_util import featurizetree, xmltotree, prepare_trees,transformer,left_child, right_child
+# prepare_trees funtion and related objects courtesy of Neo
+from tcnn_util import featurizetree, xmltotree, prepare_trees,transformer,left_child,right_child
 from util import find_between
 import xml.etree.ElementTree as ET
 
 def gltemplatetotree(string,tab_alias_dict):
     gl = find_between(string,'<OPTGUIDELINES>','</OPTGUIDELINES>')
-    print(gl)
+    # print(gl)
     root = ET.fromstring(gl)
     featurizetree(root,tab_alias_dict)
     tree = xmltotree(root)
     return tree
 
-def alias2tab(guideline, tab_alias_dict):
+def tabid2tab(guideline, tab_alias_dict):
     # Replaces table quantifier IDs in a guideline template with table names
     new_guideline = guideline
     for Q in tab_alias_dict.keys():
@@ -436,9 +450,9 @@ class Plan:
 
     def encode(self):
         # replace TABID's by table names
-        guideline = alias2tab(self.guideline, self.tab_alias_dict)
-        self.tree = gltemplatetotree(guideline,self.id_tab)
-        self.prep_tree=prepare_trees([self.tree],transformer, left_child, right_child, cuda=False)
+        guideline = tabid2tab(self.guideline, self.tab_alias_dict)
+        tree = gltemplatetotree(guideline,self.id_tab)
+        self.prep_tree=prepare_trees([tree],transformer, left_child, right_child, cuda=False)
     
     def print(self):
         attributes = vars(self)

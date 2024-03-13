@@ -1,5 +1,4 @@
 import os
-import fcntl
 from subprocess import Popen, PIPE
 import time
 import numpy as np
@@ -138,13 +137,19 @@ def db2_execute(sql,ibm_db_conn,guieline=None,
     stmt = ibm_db.prepare(ibm_db_conn, sql)
     rc = ibm_db.set_option(stmt, {ibm_db.SQL_ATTR_QUERY_TIMEOUT : def_timeout_threshold}, 0)
     
+    errorMsg = ''
+    if stmt is False:
+        print("\nERROR: Unable to prepare the SQL statement specified.")
+        errorMsg = ibm_db.stmt_errormsg()
+        print("\n" + errorMsg + "\n")
+
     tic = time.time()
     _ = ibm_db.execute(stmt)
     toc = time.time()
 
     latency = toc-tic
 
-    return latency
+    return latency, errorMsg
 
 # A function to explain query plans, and optionally generate explain outputs and/or guidelines
 # inputs:
@@ -158,7 +163,7 @@ def db2_execute(sql,ibm_db_conn,guieline=None,
 # generates 
 def db2_explain(schema_name,sql,query_id,
     hintset=None, hintset_id=None,
-    opt_plan_path='optimizer_plans', gen_exp_output=False, 
+    opt_plan_path='./optimizer_plans', gen_exp_output=False, 
     gen_guideline=False, return_cost = False, conn_str=None, cmd_verbose=False):
     
     if hintset_id is None and gen_guideline:

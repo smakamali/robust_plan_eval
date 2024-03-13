@@ -64,7 +64,7 @@ def get_query_join_preds(schema_name,sql,verbose=False):
 
     return tables_dict, query_joins, local_preds, pred_cols
 
-def get_all_join_attr(schema_name):
+def get_all_join_attr(schema_name, input_dir = './input'):
 
     schema_name=schema_name.upper()
 
@@ -77,7 +77,6 @@ def get_all_join_attr(schema_name):
     JoinAttractions['op'] = ' = '
 
     # load input queries
-    input_dir = './input'
     queries, query_ids = load_input_queries(input_dir)
 
     internal_dir = './internal'
