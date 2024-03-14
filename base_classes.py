@@ -414,8 +414,7 @@ class Query:
 
 #####################   PLAN CLASS   #####################
 
-# prepare_trees funtion and related objects courtesy of Neo
-from tcnn_util import featurizetree, xmltotree, prepare_trees,transformer,left_child,right_child
+from tcnn_util import featurizetree, xmltotree
 from util import find_between
 import xml.etree.ElementTree as ET
 
@@ -452,7 +451,6 @@ class Plan:
         # replace TABID's by table names
         guideline = tabid2tab(self.guideline, self.tab_alias_dict)
         self.plan_tree = gltemplatetotree(guideline,self.id_tab)
-        # self.prep_tree=prepare_trees([self.tree],transformer, left_child, right_child, cuda=False)
     
     def print(self):
         attributes = vars(self)
