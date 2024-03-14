@@ -1,6 +1,7 @@
 ############ LOAD QUERIES, COMPILE AND LABEL PLANS #############
 
 #  TODO: automate sample collection 
+#  TODO: specify a separate directory for output
 
 import os
 import shutil

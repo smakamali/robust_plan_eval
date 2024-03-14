@@ -451,8 +451,8 @@ class Plan:
     def encode(self):
         # replace TABID's by table names
         guideline = tabid2tab(self.guideline, self.tab_alias_dict)
-        tree = gltemplatetotree(guideline,self.id_tab)
-        self.prep_tree=prepare_trees([tree],transformer, left_child, right_child, cuda=False)
+        self.plan_tree = gltemplatetotree(guideline,self.id_tab)
+        # self.prep_tree=prepare_trees([self.tree],transformer, left_child, right_child, cuda=False)
     
     def print(self):
         attributes = vars(self)

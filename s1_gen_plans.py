@@ -1,7 +1,3 @@
-# ----------------------------- V2.2 ----------------------------------# 
-#  TODO: update plan_parser to properly extract table aliases -> DONE!
-#  TODO: abandon the idea of converting guidelines to templates. Instead only store alias_table_dict
-
 import os
 import io
 import re
