@@ -1,6 +1,6 @@
 # Robust Optimization of Queries (Roq)
 
-This repository contains the code for a robust query optimization approach as presented in paper [Roq: Robust Query Optimization Based on a Risk-aware Learned Cost Model](https://arxiv.org/abs/2401.15210). This prototype is built based on `IBM Db2`. However, the concepts and ideas are directly transferable to any other relational database management system (RDBMS) too. This documentation explains how to use the code.
+This repository contains the code for a robust query optimization approach as presented in paper [Roq: Robust Query Optimization Based on a Risk-aware Learned Cost Model](https://arxiv.org/abs/2401.15210). This prototype is built based on `IBM Db2`. However, the concepts and ideas are directly transferable to any other relational database management system (RDBMS). This documentation explains how to use the code.
 
 ## Data Preparation
 This repo assumes the dataset is already loaded in the database. Code for loading data in Db2 is available in the following repositories: 
@@ -9,11 +9,18 @@ This repo assumes the dataset is already loaded in the database. Code for loadin
 
 Steps involved in preparing data for a dataset and a workload:
 
-1. **Collect database samples:**
+1. **Installing Python dependencies:**
+
+    Run the following command:
+    ```
+    pip install -r requirements.txt
+    ```
+
+2. **Collect database samples:**
     
     The first step involves collecting samples from each table of the database. These samples are used in the subsequent steps for capturing database statistics.
 
-    Run the following code:
+    Run the following command:
     ```
     python db_sampler.py
     ```
@@ -24,9 +31,9 @@ Steps involved in preparing data for a dataset and a workload:
     - `SAMPLE_SIZE` : max number of rows to be sampled from each table, e.g. `2000`
 
 
-2. **Generate, encode, and label query-plan pairs:**
+3. **Generate, encode, and label query-plan pairs:**
 
-    Run the following code:
+    Run the following command:
     ```
     python gen_label_plans.py
     ```
@@ -45,9 +52,7 @@ Steps involved in preparing data for a dataset and a workload:
     - `dynamic_timeout` : determines whether dynamic timeout is used, Default: `False`
     - `dynamic_timeout_factor` : determines the multiplier for the dynamic timeout with respect to the optimizer's plan as a baseline, used only when `dynamic_timeout = True`, Default: `5`
 
-    *b. Run `python gen_label_plans.py`*
-
-3. **Using the PyG data loader.
+4. **Using the PyG dataset:**
 
     After data generation, encoding, and labeling are complete, the dataset must be loaded in PyG dataset modules. The default PyG dataset module is available in `pyg_data.py`. This dataset module allows for loading `train`, `val`, and `test` splits as shown in the following example:
     ```
@@ -60,11 +65,22 @@ Steps involved in preparing data for a dataset and a workload:
         test_samples = 0.1
         val_samples = 0.1, 
         )
+    val_set = queryPlanPGDataset(
+        split= 'val', 
+        files_id = 'job_main'
+        )
+    test_set = queryPlanPGDataset(
+        split= 'test', 
+        files_id = 'job_main'
+        )
+    
     ```
+
     The available parameters:
     - `split` : can be either `train`, `val`, or `test`
     - `files_id` : the unique ID of the generated data. This must match `encFileID` used in the previous step. 
     - `force_reload` : By default PyG Dataset module stores the datasets to disk after processing. In the subsequent calls, the processed dataset is loaded from disk, unless force `force_reload = True`, in which case the data is processed and saved to disk again.
+        - Note: `force_reload` must not be set to `True` for `split = 'val'` or  `'test'`. Otherwise, the different splits might end up having overlaps.
     - `test_samples` : The ratio of the dataset used for testing.
     - `val_samples` : The ratio of the remaining data used for validation. 
     
@@ -74,3 +90,5 @@ Steps involved in preparing data for a dataset and a workload:
     - `seed`: A random seed to control reproducibility of dataset splitting. 
 
 ## Running Experiments
+
+Coming soon ...
