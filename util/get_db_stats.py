@@ -1,8 +1,8 @@
 import json
 import pickle
-from db_util import *
-from util import *
-from extract_join_attraction import get_all_join_attr
+from util.db_util import *
+from util.util import *
+from util.extract_join_attraction import get_all_join_attr
 
 def get_db_stats(schema_name, input_dir='./input', internal_dir='./internal', SAMPLE_SIZE=2000, encFileID='id'):
 

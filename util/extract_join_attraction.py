@@ -1,9 +1,9 @@
 import os
 import numpy as np
 import pandas as pd
-from query_parser import parse_query
-from db_util import load_pkfk
-from util import load_input_queries
+from util.query_parser import parse_query
+from util.db_util import load_pkfk
+from util.util import load_input_queries
 
 
 

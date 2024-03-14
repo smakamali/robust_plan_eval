@@ -2,9 +2,9 @@ import os
 import json
 import numpy as np
 import pandas as pd
-from extract_join_attraction import get_query_join_preds
-from db_util import load_db_schema
-from util import load_input_queries
+from util.extract_join_attraction import get_query_join_preds
+from util.db_util import load_db_schema
+from util.util import load_input_queries
 
 def encodeOps (ops):
     encOps = []

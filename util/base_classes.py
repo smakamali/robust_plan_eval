@@ -6,11 +6,11 @@ import numpy as np
 import pandas as pd
 import json
 import pickle
-from extract_join_attraction import get_query_join_preds
-from db_util import db2_explain, db2_execute, get_card_sel, load_db_schema
-from extract_stats import combinations_of_2, gini
-from query_encoder import encodeOps, getJoinProfile, encodeTypes
-from explain_parser import ExplainParser as explain_parser
+from util.extract_join_attraction import get_query_join_preds
+from util.db_util import db2_explain, db2_execute, get_card_sel, load_db_schema
+from util.extract_stats import combinations_of_2, gini
+from util.query_encoder import encodeOps, getJoinProfile, encodeTypes
+from util.explain_parser import ExplainParser as explain_parser
 
 #####################   QUERY CLASS   #####################
 
@@ -262,8 +262,6 @@ def query_encoder(schema_name, max_tables, base_sels, base_cards, pred_count, gi
             if AdjMat[i,j]>0:
                 edgeIndc.append([i,j])
     edgeIndc = np.array(edgeIndc)
-    edgeIndc = np.transpose(edgeIndc)
-
 
     # Construct edge features
     edgeFeat=[]
@@ -272,16 +270,18 @@ def query_encoder(schema_name, max_tables, base_sels, base_cards, pred_count, gi
             edgeFeat.append(edgeFeaturesMatrix[edgeIndc[i][0],edgeIndc[i][1],:])
     edgeFeat = np.array(edgeFeat)
 
+    edgeIndc = np.transpose(edgeIndc)
+
     # construct Graph Features
     GF = [pred_count[key] for key in pred_count]
     GF = np.array(GF)
 
     # Populate the encodings and labels in the results dictionary
-    pyG_encoding['nodeFeatures'] = (nodeFeatures)
-    pyG_encoding['edgeIndc'] = (edgeIndc)
-    pyG_encoding['edgeFeat'] = (edgeFeat)
-    pyG_encoding['graphFeat'] = (GF)
-    return pyG_encoding
+    # pyG_encoding['nodeFeatures'] = (nodeFeatures)
+    # pyG_encoding['edgeIndc'] = (edgeIndc)
+    # pyG_encoding['edgeFeat'] = (edgeFeat)
+    # pyG_encoding['graphFeat'] = (GF)
+    return nodeFeatures, edgeIndc, edgeFeat, GF
 
 class Query:
     def __init__(self, schema, sql, q_id, encFileID, conn_str_path = './conn_str', input_dir = './input/', opt_plan_path = './optimizer_plans/', internal_dir = './internal/', sample_size = 2000, verbose=False):
@@ -366,7 +366,7 @@ class Query:
             self.default_compile()
 
         self.ext_sample_info()
-        self.pyG_encoding = query_encoder(self.schema, self.max_tables, self.sel, self.card, self.pred_count, self.giniCoefDict, self.cardToColDict, self.correlationsDict, self.joinIncsDict, self.joinTypesDict, self.joinFactorsDict, self.tables_dict, self.jpDF, self.id_tab)
+        self.node_attr, self.edge_indc, self.edge_attr, self.graph_attr = query_encoder(self.schema, self.max_tables, self.sel, self.card, self.pred_count, self.giniCoefDict, self.cardToColDict, self.correlationsDict, self.joinIncsDict, self.joinTypesDict, self.joinFactorsDict, self.tables_dict, self.jpDF, self.id_tab)
 
     def compile(self,hintset,hintset_id,gen_exp_output):
         with open(self.conn_str_path, "r") as conn_str_f:

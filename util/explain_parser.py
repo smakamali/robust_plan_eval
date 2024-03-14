@@ -1,4 +1,4 @@
-from query_parser import parse_query
+from util.query_parser import parse_query
 
 # Helper function to return 'n' sized chunks from 'l'
 def chunks(l, n):

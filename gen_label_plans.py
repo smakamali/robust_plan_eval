@@ -9,9 +9,9 @@ import subprocess as sp
 import pickle
 import math
 from subprocess import Popen, PIPE
-from util import load_input_queries
-from base_classes import Query
-from db_util import connect_to_db,close_connection_to_db
+from util.util import load_input_queries
+from util.base_classes import Query
+from util.db_util import connect_to_db,close_connection_to_db
 
 
 hintsets=[

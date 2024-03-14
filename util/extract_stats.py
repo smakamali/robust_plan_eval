@@ -3,8 +3,8 @@ import numpy as np
 import pandas as pd
 import json
 import pickle
-from db_util import load_db_schema
-from util import load_input_queries
+from util.db_util import load_db_schema
+from util.util import load_input_queries
 
 def gini(x):
     # (Warning: This is a concise implementation, but it is O(n**2)

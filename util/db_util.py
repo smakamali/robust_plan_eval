@@ -6,7 +6,7 @@ import pandas as pd
 import ibm_db
 import ibm_db_dbi
 import subprocess as sp
-from util import find_between
+from util.util import find_between
 
 def connect_to_db(conn_str, verbose=False):
     try:

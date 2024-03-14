@@ -1,7 +1,7 @@
 import os
 import pandas as pd
-from db_util import *
-from util import load_input_queries
+from util.db_util import *
+from util.util import load_input_queries
 
 def baseSelectivityGen(schema_name,max_num_queries=1000000,encFileID='_id'):
     schema_name=schema_name.upper()

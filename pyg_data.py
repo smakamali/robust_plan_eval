@@ -7,7 +7,7 @@ import torch
 from torch_geometric.data import Data
 from sklearn.model_selection import train_test_split
 from torch_geometric.data import InMemoryDataset
-from tcnn_util import prepare_trees, transformer, left_child, right_child
+from util.tcnn_util import prepare_trees, transformer, left_child, right_child
 
 class queryPlanPGDataset(InMemoryDataset):
     def __init__(self, root='./',  split: str = "train", 
@@ -97,10 +97,10 @@ class queryPlanPGDataset(InMemoryDataset):
                     opt_plan = True
 
                 data = Data(
-                    x_s=torch.Tensor(query.pyG_encoding['nodeFeatures']),
-                    edge_index_s=torch.Tensor(query.pyG_encoding['edgeIndc']),
-                    edge_attr_s =torch.Tensor(query.pyG_encoding['edgeFeat']),
-                    graph_attr = torch.Tensor(query.pyG_encoding['graphFeat']),
+                    x_s=torch.Tensor(query.node_attr),
+                    edge_index_s=torch.Tensor(query.edge_indc),
+                    edge_attr_s =torch.Tensor(query.edge_attr),
+                    graph_attr = torch.Tensor(query.graph_attr),
                     y = torch.Tensor([plan.latency]),
                     plan_attr=torch.Tensor(prep_tree_attr),
                     plan_ord=torch.Tensor(prep_tree_ord),
@@ -109,7 +109,7 @@ class queryPlanPGDataset(InMemoryDataset):
                     opt_choice = torch.Tensor([opt_plan]),
                     opt_cost = torch.Tensor([float(plan.cost)]),
                     y_t = torch.Tensor([plan.latency]),  # placeholder for transformed targets
-                    num_nodes_s = torch.Tensor(query.pyG_encoding['nodeFeatures']).shape[0], 
+                    num_nodes = torch.Tensor(query.node_attr).shape[0], 
                     # purturbed_runtimes = torch.Tensor(purturbed_runtimes[i]),
                     )
                 data_list.append(data)

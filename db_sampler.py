@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 import shutil
-from db_util import load_db_schema,connect_to_db,close_connection_to_db
+from util.db_util import load_db_schema,connect_to_db,close_connection_to_db
 
 def sampleData(schema_name, SAMPLE_SIZE):
     samples_dir = './sample_data_{}_{}/'.format(schema_name.lower(),str(SAMPLE_SIZE))
