@@ -16,7 +16,17 @@ Steps involved in preparing data for a dataset and a workload:
     pip install -r requirements.txt
     ```
 
-2. **Collect database samples:**
+2. **create a connection string file**
+    ```
+    cp conn_str_temp conn_str
+    ```
+    Modify the content of conn_str that follows this template:
+    ```
+    DATABASE=<schema_name>;HOSTNAME=localhost;PORT=50000;PROTOCOL=TCPIP;UID=db2inst1;PWD=*****;
+
+    ```
+
+3. **Collect database samples:**
     
     The first step involves collecting samples from each table of the database. These samples are used in the subsequent steps for capturing database statistics.
 
@@ -31,7 +41,7 @@ Steps involved in preparing data for a dataset and a workload:
     - `SAMPLE_SIZE` : max number of rows to be sampled from each table, e.g. `2000`
 
 
-3. **Generate, encode, and label query-plan pairs:**
+4. **Generate, encode, and label query-plan pairs:**
 
     Run the following command:
     ```
@@ -52,7 +62,7 @@ Steps involved in preparing data for a dataset and a workload:
     - `dynamic_timeout` : determines whether dynamic timeout is used, Default: `False`
     - `dynamic_timeout_factor` : determines the multiplier for the dynamic timeout with respect to the optimizer's plan as a baseline, used only when `dynamic_timeout = True`, Default: `5`
 
-4. **Using the PyG dataset:**
+5. **Using the PyG dataset:**
 
     After data generation, encoding, and labeling are complete, the dataset must be loaded in PyG dataset modules. The default PyG dataset module is available in `pyg_data.py`. This dataset module allows for loading `train`, `val`, and `test` splits as shown in the following example:
     ```
