@@ -187,10 +187,7 @@ def experiment(experiment_id = 'job', architecture_p = 'bao',
 
         es = pl.callbacks.EarlyStopping(monitor='val_loss',patience=patience, verbose=True)
         
-        if tb_log:
-            logger = pl.loggers.TensorBoardLogger('./lightning_logs', name = model_name)
-        else:
-            logger = None
+        logger = pl.loggers.TensorBoardLogger('./lightning_logs', name = model_name)
         
         checkpointing = pl.callbacks.ModelCheckpoint(
             dirpath='./lightning_models/',
@@ -205,7 +202,7 @@ def experiment(experiment_id = 'job', architecture_p = 'bao',
             devices=1, 
             callbacks = [es, checkpointing], 
             logger=logger, 
-            log_every_n_steps=log_every_n_steps
+            log_every_n_steps=10
             )
 
         trainer.fit(model,train_loader,val_loader)
