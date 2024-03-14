@@ -1,5 +1,3 @@
-# TODO: replace aliases with table names using alias_table_dict
-
 import numpy as np
 import torch
 import xml.etree.ElementTree as ET
@@ -37,10 +35,7 @@ def featurizetree(root,id_tab):
         'TBSCAN','FILTER','SORT',
         'IXSCAN','FETCH','LPREFETCH','GRPBY'
         ])
-    # print("id_tab ------------->",id_tab)
     tabs = to_2d([tab.split('.')[1] for tab in id_tab.keys()])
-    # print("tabs ------------->", tabs)
-    # tabs = to_2d(['Q'+str(i) for i in range(1,24)])
     
     op_enc = OneHotEncoder(handle_unknown='ignore')
     op_enc.fit(operators)

@@ -73,7 +73,6 @@ Steps involved in preparing data for a dataset and a workload:
         split= 'test', 
         files_id = 'job_main'
         )
-    
     ```
 
     The available parameters:
@@ -85,7 +84,7 @@ Steps involved in preparing data for a dataset and a workload:
     - `val_samples` : The ratio of the remaining data used for validation. 
     
     Other parameters:
-    - `internal_dir` : The path to the internal files. Deafult: `./internal/`
+    - `internal_dir` : The path to the internal files. Default: `./internal/`
     - `num_samples` : If specified will be used to subsample the entire dataset before splitting. Default: `False`
     - `seed`: A random seed to control reproducibility of dataset splitting. 
 
