@@ -339,7 +339,7 @@ class Query:
         # db stats are only collected if they do not exist or if `force_recollect = True`
         if not (os.path.isfile(join_inc_path) and os.path.isfile(join_type_path) and os.path.isfile(join_factor_path) and os.path.isfile(chai2_matrix_path)) or force_recollect:
 
-            from get_db_stats import get_db_stats
+            from util.get_db_stats import get_db_stats
             get_db_stats(schema_name=self.schema, input_dir=self.input_dir, internal_dir=self.internal_dir, SAMPLE_SIZE=self.sample_size, encFileID=self.encFileID)
 
         # load all db stats
@@ -414,8 +414,8 @@ class Query:
 
 #####################   PLAN CLASS   #####################
 
-from tcnn_util import featurizetree, xmltotree
-from util import find_between
+from util.tcnn_util import featurizetree, xmltotree
+from util.util import find_between
 import xml.etree.ElementTree as ET
 
 def gltemplatetotree(string,tab_alias_dict):

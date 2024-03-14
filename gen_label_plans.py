@@ -137,7 +137,7 @@ if __name__ == '__main__':
     gen_label_plans(
         max_num_queries = 114, # Specify the max number of queries to explain
         schema_name = 'imdb', # schema name
-        encFileID = "job_main", # a unique id for the dataset
+        encFileID = "job", # a unique id for the dataset
         conn_str_path = './conn_str', # path to the file containing a connection string to the database
         input_dir = "./input/", # the directory that contains query.sql file(s)
         opt_plan_path = './job_main_plans/', # the path used to store explain outputs and guidelines
