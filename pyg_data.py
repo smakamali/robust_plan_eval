@@ -10,7 +10,7 @@ from torch_geometric.data import InMemoryDataset
 from tcnn_util import prepare_trees, transformer, left_child, right_child
 
 class queryPlanPGDataset(InMemoryDataset):
-    def __init__(self, root,  split: str = "train", 
+    def __init__(self, root='./',  split: str = "train", 
                  transform=None, pre_transform=None, 
                  pre_filter=None, force_reload = False,files_id=None, internal_dir='./internal/',
                  seed = 0, num_samples = None, val_samples = 0.1, test_samples = 0.1):

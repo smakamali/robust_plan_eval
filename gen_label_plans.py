@@ -30,7 +30,7 @@ hintsets=[
     ['db2 .opt set disable mgjn;\n', 'db2 .opt set disable hsjn;\n','db2 .opt set disable iscan;\n'],
     ]
 
-def gen_label_plans(max_num_queries, schema_name, encFileID, conn_str_path, input_dir, opt_plan_path, internal_dir, sample_size=2000,timeout_thr=10, dynamic_timeout=False, dynamic_timeout_factor=5):
+def gen_label_plans(max_num_queries, schema_name, encFileID, conn_str_path, input_dir='./input/', opt_plan_path='./optimizer_plans/', internal_dir='./internal/', sample_size=2000,timeout_thr=60, dynamic_timeout=False, dynamic_timeout_factor=5):
 
     with open(conn_str_path, "r") as conn_str_f:
         conn_str = conn_str_f.read()
