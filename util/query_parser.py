@@ -15,9 +15,18 @@ def delete_node(node, node_to_remove):
 def remove_node(tree,node_to_remove):
     return tree.transform(delete_node,node_to_remove=node_to_remove)
 
+# def node_is_id(node):
+#     if isinstance(node,exp.Identifier):
+#         print((repr(node)))
+#         node.this = node.this.upper()
+#     return node
+
+# def tree_upper(tree):
+#     return tree.transform(node_is_id)
+
 def upper(input):
     if isinstance(input,dict):
-        output = input.copy()
+        output = {}
         for key in input:
             output[key.upper()]=input[key].upper()
         return output
@@ -31,11 +40,26 @@ def upper(input):
                 raise Exception("the input must of list of lists of strings")
         return input
 
+def split_col_list(input):
+    res = []
+    if isinstance(input,list):
+        for item in input:
+            res.append(split_col_list(item))
+    elif isinstance(input,exp.Column):
+        res.extend([str(i) for i in input.parts])
+    else:
+        res.append(str(input))
+    return res
+
+def local_pred_to_upper(input):
+    input.this
+    print(repr(input))
+    return input
+
 def parse_query(sql,verbose=False):
     supported_ops = (exp.Predicate,exp.Unary,exp.Or)
 
     ast = parse_one(sql)
-    # print(repr(ast))
     root = build_scope(ast)
 
     tables = [
@@ -64,10 +88,6 @@ def parse_query(sql,verbose=False):
             tb_id = str(table.args['this'])
         tables_dict[tb_id]=tb_name
 
-    # print(repr(ast))
-
-    # find all columns
-
     print("-----------------------------")
     join_preds = []
     local_preds = []
@@ -75,11 +95,9 @@ def parse_query(sql,verbose=False):
 
     for join in ast.find_all(exp.Join):
         for pred in join.find_all(supported_ops):
-            join_preds.append(str(pred))
-            # print("pred",repr(pred))
+            join_preds.append([pred.this,pred.expression,pred.key])
             for col in pred.find_all(exp.Column):
-                pred_cols.append(str(col))
-                # print(col)
+                pred_cols.append(col)
 
     wh = ast.find(exp.Where)
     if verbose:
@@ -87,14 +105,13 @@ def parse_query(sql,verbose=False):
     while wh.find(supported_ops):
         pred = wh.find(supported_ops)
         if pred.find(exp.Literal,exp.Null):
+            # pred=tree_upper(pred)
             local_preds.append(str(pred))
         else:
-            join_preds.append(str(pred))
-        # print("where pred cols")
+            join_preds.append([pred.this,pred.expression,pred.key])
+
         for col in pred.find_all(exp.Column):
-            pred_cols.append(str(col))
-            # print(col)
-        # if pred.find((exp.Not)):
+            pred_cols.append(col)
         wh = remove_node(wh,pred)
         if verbose:
             print("------- > Removing", str(pred))
@@ -102,10 +119,12 @@ def parse_query(sql,verbose=False):
     
     # get unique predicate columns
     pred_cols=list(dict.fromkeys(pred_cols))
+    pred_cols = split_col_list(pred_cols)
+    join_preds = split_col_list(join_preds)
 
-    return upper(tables_dict),upper(join_preds),upper(local_preds),upper(pred_cols)
+    return upper(tables_dict),upper(join_preds),(local_preds),upper(pred_cols)
 
-# THE FOLLOWING LINES FOR TESTING
+############ THE FOLLOWING LINES FOR TESTING ##############
 # sql = """SELECT MIN(mc.note) AS production_note,
 #        MIN(t.title) AS movie_title,
 #        MIN(t.production_year) AS movie_year

@@ -5,47 +5,60 @@ from util.query_parser import parse_query
 from util.db_util import load_pkfk
 from util.util import load_input_queries
 
+def map_op(op):
+    mapping = {
+        'EQ':' = ',
+        'GT':' > ',
+        'LT':' < ',
+        'GTE':' >= ',
+        'LTE':' <= ',
+    }
+    return mapping[op]
 
+def complete_col(item,schema_name):
+    if len(item) == 3: # if schema is specified 
+        return item
+    if len(item) == 2: # if schema is NOT specified
+        return [schema_name]+item
+    if len(item) == 1:
+        raise Exception("Column qualifier must include a Table name.")
+
+def replace_alias(col,tables_dict):
+    col_copy = col.copy()
+    if col_copy[1] in tables_dict:
+        col_copy[1]= tables_dict[col_copy[1]]
+    return col_copy
+
+def enrich_col(col):
+    return [col[0],col[1],'.'.join(col)]
 
 def get_query_join_preds(schema_name,sql,verbose=False):
+
     tables_dict,join_preds,local_preds,pred_cols=parse_query(sql)
     
     schema_name=schema_name.upper()
 
-    # TODO: The following split should be done in parse_query
     query_joins = []
     for join in join_preds:
-        left_tab = join.split(' = ')[0].split('.')[0]
-        right_tab = join.split(' = ')[1].split('.')[0]
-        full_left = left_tab
-        if left_tab in tables_dict:
-            full_left = tables_dict[left_tab]
-        full_right = right_tab
-        if right_tab in tables_dict:
-            full_right = tables_dict[right_tab]
-        
-        left_col=schema_name+'.'+full_left+'.'+join.split(' = ')[0].split('.')[1]
-        right_col = schema_name+'.'+full_right+'.'+join.split(' = ')[1].split('.')[1]
-        
-        query_joins.append([schema_name,full_left,left_col,schema_name,full_right,right_col,' = '])
+        j_list = []
+        for idx,item in enumerate(join):
+            if idx < 2: # if item is column
+                item = complete_col(item,schema_name)
+                item = replace_alias(item,tables_dict)
+                item = enrich_col(item)
+                j_list.extend(item)
+            if idx == 2: # if item is operator
+                j_list.extend([map_op(item[0])])
+        query_joins.append(j_list)
 
-    pred_cols_full = []
+    l = []
     for col in pred_cols:
-        tab = col.split('.')[0]
-        col = col.split('.')[1]
-        if tab in tables_dict:
-            full_tab = tables_dict[tab]
-        else:
-            full_tab = tab
-        
-        full_column=[schema_name+'.'+full_tab,col]
-        
-        pred_cols_full.append(full_column)
-    pred_cols = pred_cols_full
+        col = complete_col(col,schema_name)
+        col = replace_alias(col,tables_dict)
+        l.append(['.'.join(col[:2]),col[2]])
+    pred_cols = l
 
     if verbose:
-        # print("Query ID: ",query_ids[idx])
-        # print(sql)
         
         print("Tables {<alias>:<table_name>}:")
         print(tables_dict)
@@ -64,7 +77,7 @@ def get_query_join_preds(schema_name,sql,verbose=False):
 
     return tables_dict, query_joins, local_preds, pred_cols
 
-def get_all_join_attr(schema_name, input_dir = './input'):
+def get_all_join_attr(schema_name, encFileID, input_dir = './input'):
 
     schema_name=schema_name.upper()
 
@@ -85,7 +98,7 @@ def get_all_join_attr(schema_name, input_dir = './input'):
     for idx,sql in enumerate(queries):
         print(query_ids[idx])
         # print(sql)
-        tables_dict,joins_preds,local_preds,pred_cols=get_query_join_preds(schema_name,sql,verbose=False)
+        _,joins_preds,_,_=get_query_join_preds(schema_name,sql,verbose=True)
         all_joins.extend(joins_preds)
 
     all_joins=np.array(all_joins)
@@ -94,7 +107,7 @@ def get_all_join_attr(schema_name, input_dir = './input'):
     JoinAttractions = pd.concat([wl_joins_df, JoinAttractions], ignore_index=True, sort=False)
     JoinAttractions.drop_duplicates(inplace=True,keep='first')
 
-    JoinAttractions.to_csv(os.path.join(internal_dir,'JoinAttractions.csv'),index=False,header=True)
+    JoinAttractions.to_csv(os.path.join(internal_dir,'JoinAttractions_{}.csv'.format(encFileID)),index=False,header=True)
 
 if __name__ == '__main__':
     get_all_join_attr(schema_name='imdb')

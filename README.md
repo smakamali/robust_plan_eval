@@ -122,7 +122,7 @@ Steps involved in preparing data for a dataset and a workload:
 
     After data generation, encoding, and labeling are complete, the dataset must be loaded in PyG dataset modules. The default PyG dataset module is available in `pyg_data.py`. This dataset module allows for loading `train`, `val`, and `test` splits as shown in the following example:
     ```
-    from pyg_data import queryPlanPGDataset
+    from util.pyg_data import queryPlanPGDataset
 
     train_set = queryPlanPGDataset(
         split= 'train', 

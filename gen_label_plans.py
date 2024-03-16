@@ -2,12 +2,14 @@
 
 #  TODO: automate sample collection 
 #  TODO: specify a separate directory for output
+#  TODO: make extraction of join attractions from the input optional and limited to the max_num_queries
 
 import os
 import shutil
 import subprocess as sp
 import pickle
 import math
+import time
 from subprocess import Popen, PIPE
 from util.util import load_input_queries
 from util.base_classes import Query
@@ -31,6 +33,8 @@ hintsets=[
     ]
 
 def gen_label_plans(max_num_queries, schema_name, encFileID, conn_str_path, input_dir='./input/', opt_plan_path='./optimizer_plans/', internal_dir='./internal/', sample_size=2000,timeout_thr=60, dynamic_timeout=False, dynamic_timeout_factor=5):
+
+    tic = time.time()
 
     with open(conn_str_path, "r") as conn_str_f:
         conn_str = conn_str_f.read()
@@ -71,45 +75,55 @@ def gen_label_plans(max_num_queries, schema_name, encFileID, conn_str_path, inpu
     guide_success_id=0
     query_list=[]
     for idx,sql in enumerate(queries):
-        q_id = query_ids[idx]
-        
-        query = Query(schema_name,sql,q_id,encFileID=encFileID, conn_str_path=conn_str_path,input_dir=input_dir, opt_plan_path=opt_plan_path,internal_dir=internal_dir,sample_size=sample_size)
-        
-        query.encode()
-        
-        for hintset_id, histset in enumerate(hintsets):
+        one_success = False
+        try:
+            q_id = query_ids[idx]
             
-            print("compile query {} with hintset {}".format(str(idx),str(hintset_id)))
+            query = Query(schema_name,sql,q_id,encFileID=encFileID, conn_str_path=conn_str_path,input_dir=input_dir, opt_plan_path=opt_plan_path,internal_dir=internal_dir,sample_size=sample_size)
             
-            query.compile(histset,hintset_id,gen_exp_output=False)
+            query.encode()
             
-            query.plans[hintset_id].encode()
-            
-            # warm up run to dampen the impact of cold buffer pool for the default plan
-            if hintset_id == 0:
-                _ = query.execute(hintset=histset,
-                hintset_id=hintset_id, 
-                ibm_db_conn=ibm_db_conn,timeout_thr=1000
-                )
-            
-            # update the timeout threshold if `dynamic_timeout = True`
-            if dynamic_timeout:
-                timeout_thr = math.ceil(max(timeout_thr,query.plans[0].latency*dynamic_timeout_factor))
-            
-            errorMsg = query.execute(hintset=histset,
-                hintset_id=hintset_id, 
-                ibm_db_conn=ibm_db_conn,timeout_thr=timeout_thr,
-                exec_verbose = True
-                )
-            
-            guide_success_id+=1
+            for hintset_id, histset in enumerate(hintsets):
+                
+                print("compile query {} with hintset {}".format(str(idx),str(hintset_id)))
+                
+                try:
+                    query.compile(histset,hintset_id,gen_exp_output=False)
+                    
+                    query.plans[hintset_id].encode()
+                    
+                    # warm up run to dampen the impact of cold buffer pool for the default plan
+                    if hintset_id == 0:
+                        _ = query.execute(hintset=histset,
+                        hintset_id=hintset_id, 
+                        ibm_db_conn=ibm_db_conn,timeout_thr=1000
+                        )
+                    
+                    # update the timeout threshold if `dynamic_timeout = True`
+                    if dynamic_timeout:
+                        timeout_thr = math.ceil(max(timeout_thr,query.plans[0].latency*dynamic_timeout_factor))
+                    
+                    errorMsg = query.execute(hintset=histset,
+                        hintset_id=hintset_id, 
+                        ibm_db_conn=ibm_db_conn,timeout_thr=timeout_thr,
+                        exec_verbose = True
+                        )
+                    
+                    guide_success_id+=1
+                    one_success = True
+                
+                except:
+                    pass
 
-        query_list.append(query)
-
-        query_success_id+=1
+            if one_success:
+                query_list.append(query)
+                query_success_id+=1
+        
+        except:
+            pass
         
         # checkpoint - write to disk every 100 query
-        if query_success_id%100:
+        if query_success_id%50:
             with open(os.path.join(internal_dir,'labeled_query_plans_{}.pickle'.format(encFileID)), 'wb') as f:
                 pickle.dump(query_list, f)
 
@@ -127,24 +141,28 @@ def gen_label_plans(max_num_queries, schema_name, encFileID, conn_str_path, inpu
     with open(os.path.join(internal_dir,'labeled_query_plans_{}.pickle'.format(encFileID)),'wb') as f:
         pickle.dump(query_list, f)
 
+    toc = time.time()
 
     print("********  Processing all queries is done!  ********")
     print(query_success_id, "queries were processed.")
     print(guide_success_id, "explains and guidelines were created.")
+    print("Time it took to generate samples for {} queries".format((toc-tic)/query_success_id))
     print()
 
 if __name__ == '__main__':
+
     gen_label_plans(
-        max_num_queries = 114, # Specify the max number of queries to explain
+        max_num_queries = 10000, # Specify the max number of queries to explain
         schema_name = 'imdb', # schema name
-        encFileID = "job", # a unique id for the dataset
+        encFileID = "job_synt", # a unique id for the dataset
         conn_str_path = './conn_str', # path to the file containing a connection string to the database
         input_dir = "./input/", # the directory that contains query.sql file(s)
-        opt_plan_path = './job_main_plans/', # the path used to store explain outputs and guidelines
+        opt_plan_path = './job_synt_plans/', # the path used to store explain outputs and guidelines
         internal_dir = './internal/', # the path to store intermediary files
         sample_size = 2000, # number of samples used per table
-        timeout_thr = 10, # timeout threshold to avoid long running query/plans 
+        timeout_thr = 60, # timeout threshold to avoid long running query/plans 
         dynamic_timeout = False, # determines whether dynamic timeout is used 
         dynamic_timeout_factor = 5 # determines the multiplier for the dynamic timeout with respect to the optimizer's plan as a baseline, used only when `dynamic_timeout = True`
         )
+
     

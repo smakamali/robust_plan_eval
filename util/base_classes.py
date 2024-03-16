@@ -154,8 +154,6 @@ def query_encoder(schema_name, max_tables, base_sels, base_cards, pred_count, gi
    
     schema_name=schema_name.upper()
     
-    pyG_encoding = {}
-
     AM = np.zeros((max_tables,max_tables,5)) # initialize Adjacency Matrix
     CR = np.zeros((max_tables,max_tables,1)) # initialize Card Ratio Matrix
     CC = np.zeros((max_tables,max_tables,2)) # initialize Card to Col Card Matrix
@@ -326,7 +324,7 @@ class Query:
             tab_alias_dict=self.tab_alias_dict,
             )
         
-    def ext_sample_info(self,force_recollect=False):
+    def ext_sample_info(self):
 
         join_inc_path = os.path.join(self.internal_dir,'joinIncs_{}.json'.format(str(self.encFileID)))
         join_type_path = os.path.join(self.internal_dir,'joinTypes_{}.json'.format(str(self.encFileID)))
@@ -336,8 +334,8 @@ class Query:
         with open(self.conn_str_path, "r") as conn_str_f:
             conn_str = conn_str_f.read()
 
-        # db stats are only collected if they do not exist or if `force_recollect = True`
-        if not (os.path.isfile(join_inc_path) and os.path.isfile(join_type_path) and os.path.isfile(join_factor_path) and os.path.isfile(chai2_matrix_path)) or force_recollect:
+        # db stats are only collected if they do not exist 
+        if not (os.path.isfile(join_inc_path) and os.path.isfile(join_type_path) and os.path.isfile(join_factor_path) and os.path.isfile(chai2_matrix_path)):
 
             from util.get_db_stats import get_db_stats
             get_db_stats(schema_name=self.schema, input_dir=self.input_dir, internal_dir=self.internal_dir, SAMPLE_SIZE=self.sample_size, encFileID=self.encFileID)

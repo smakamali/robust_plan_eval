@@ -1,4 +1,5 @@
 import os
+import re
 import random
 import numpy as np
 import pandas as pd
@@ -32,7 +33,11 @@ def load_input_queries(input_dir):
                     if line.strip('\n').strip(' ') != '':
                         file_content.append(line)
                 file_content=''.join(file_content)
-                queries.extend(['SELECT '+query for query in file_content.upper().split('SELECT ')[1:]])
+                queries.extend(['SELECT '+query for query in re.split('SELECT |select ',file_content)[1:]])
+    
+    if len(query_ids) != len(queries):
+        query_ids = ['q{}'.format(i) for i in range(len(queries))]
+
     return queries, query_ids
 
 def find_between(s, first, last ):
@@ -61,7 +66,7 @@ def join_profile(join_list, table_datas, SAMPLE_SIZE):
     print("Computing join types...")
     for idx, join in enumerate(join_list):
         print("Progress",(idx+1)/len(join_list)*100)
-        # print(join)
+        # print("join -------------- >",join)
         joinPredID = str(join[0])+'-'+str(join[1])
         joinPredIDAlt = str(join[1])+'-'+str(join[0])
         leftTab = '.'.join(join[0].split('.')[:2])

@@ -289,7 +289,7 @@ def extractSampleInfo(schema_name, SAMPLE_SIZE, max_num_queries = 1000000, encFi
         multiPred=0
         cyclic=0
 
-        tables_dict,query_joins,local_preds,pred_cols=get_query_join_preds(schema_name,sql,verbose=True)
+        tables_dict,query_joins,local_preds,pred_cols=get_query_join_preds(schema_name,sql,encFileID,verbose=False)
 
         # create a dataframe containing query join preds
         query_joins=np.array(query_joins)

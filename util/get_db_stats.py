@@ -11,8 +11,9 @@ def get_db_stats(schema_name, input_dir='./input', internal_dir='./internal', SA
     table_dict = load_db_schema(schema_name,conn_str)
     tables = list(table_dict.keys())
 
-    get_all_join_attr(schema_name, input_dir = input_dir)
-    JoinAttractions = pd.read_csv(os.path.join(internal_dir,'JoinAttractions.csv'),header=0)
+    # generate and extract join attractions
+    get_all_join_attr(schema_name, encFileID ,input_dir = input_dir)
+    JoinAttractions = pd.read_csv(os.path.join(internal_dir,'JoinAttractions_{}.csv'.format(encFileID)),header=0)
 
     samples_dir = './sample_data_{}_{}/'.format(schema_name.lower(),str(SAMPLE_SIZE))
 
