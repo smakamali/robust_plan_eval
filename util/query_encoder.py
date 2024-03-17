@@ -130,7 +130,7 @@ def generate_join_graph(schema_name,encFileID,max_num_queries):
         NC[NC!=0]=0
         torchEncoding[query_id]={}
 
-        tables_dict,query_joins,local_preds,pred_cols=get_query_join_preds(schema_name,sql,verbose=False)
+        tables_dict,query_joins,_,_=get_query_join_preds(schema_name,sql,verbose=False)
 
         # get a list of tables referenced in the query
         table_list = ['.'.join([schema_name,str(tables_dict[key])]) for key in tables_dict]

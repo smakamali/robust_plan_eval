@@ -249,7 +249,9 @@ def get_last_plan_cost(conn_str):
 
     sql = "select total_cost from systools.explain_operator where operator_type = 'RETURN'"
     
-    plan_cost = pd.read_sql(sql,ibm_db_dbi_conn).values.squeeze()
+    plan_cost = pd.read_sql(sql,ibm_db_dbi_conn)
+    print("plan_cost",plan_cost)
+    plan_cost = plan_cost.values.squeeze()
     _=close_connection_to_db(ibm_db_conn)
 
     return plan_cost

@@ -3,6 +3,8 @@
 #  TODO: automate sample collection 
 #  TODO: specify a separate directory for output
 #  TODO: make extraction of join attractions from the input optional and limited to the max_num_queries
+#  TODO: should we continue running a query after its default plan has timed out?
+#  TODO: 
 
 import os
 import shutil
@@ -96,8 +98,13 @@ def gen_label_plans(max_num_queries, schema_name, encFileID, conn_str_path, inpu
                     if hintset_id == 0:
                         _ = query.execute(hintset=histset,
                         hintset_id=hintset_id, 
-                        ibm_db_conn=ibm_db_conn,timeout_thr=1000
+                        ibm_db_conn=ibm_db_conn,timeout_thr=timeout_thr
                         )
+                    
+                    # if the defaul plan times out, skip the whole query
+                    if query.plans[0].latency > timeout_thr:
+                        print("Default plan timed out. Skipping query {}...".format(q_id))
+                        break
                     
                     # update the timeout threshold if `dynamic_timeout = True`
                     if dynamic_timeout:
@@ -113,22 +120,24 @@ def gen_label_plans(max_num_queries, schema_name, encFileID, conn_str_path, inpu
                     one_success = True
                 
                 except:
+                    print("Execution failed for query {}, plan {}.".format(q_id,hintset_id))
                     pass
 
             if one_success:
                 query_list.append(query)
                 query_success_id+=1
-        
+            
         except:
+            print("Encoding failed for query {}.".format(q_id))
             pass
         
         # checkpoint - write to disk every 100 query
-        if query_success_id%50:
+        if query_success_id%5:
             with open(os.path.join(internal_dir,'labeled_query_plans_{}.pickle'.format(encFileID)), 'wb') as f:
                 pickle.dump(query_list, f)
 
         # Unsuccessful compiles leads to creating Db2 dump file that eats up space. This code block periodically clears the dump files.
-        if query_success_id%50:
+        if query_success_id%5:
             cmd = 'rm -r -f ~/sqllib/db2dump/DIAG0000/FODC_AppErr_*'
             process = Popen( "/bin/bash", shell=False, universal_newlines=True,
                         stdin=PIPE, stdout=PIPE, stderr=PIPE)
@@ -146,13 +155,13 @@ def gen_label_plans(max_num_queries, schema_name, encFileID, conn_str_path, inpu
     print("********  Processing all queries is done!  ********")
     print(query_success_id, "queries were processed.")
     print(guide_success_id, "explains and guidelines were created.")
-    print("Time it took to generate samples for {} queries".format((toc-tic)/query_success_id))
+    print("Time to generate and label each sample: {} seconds".format((toc-tic)/query_success_id))
     print()
 
 if __name__ == '__main__':
 
     gen_label_plans(
-        max_num_queries = 10000, # Specify the max number of queries to explain
+        max_num_queries = 500, # Specify the max number of queries to explain
         schema_name = 'imdb', # schema name
         encFileID = "job_synt", # a unique id for the dataset
         conn_str_path = './conn_str', # path to the file containing a connection string to the database
@@ -160,7 +169,7 @@ if __name__ == '__main__':
         opt_plan_path = './job_synt_plans/', # the path used to store explain outputs and guidelines
         internal_dir = './internal/', # the path to store intermediary files
         sample_size = 2000, # number of samples used per table
-        timeout_thr = 60, # timeout threshold to avoid long running query/plans 
+        timeout_thr = 30, # timeout threshold to avoid long running query/plans 
         dynamic_timeout = False, # determines whether dynamic timeout is used 
         dynamic_timeout_factor = 5 # determines the multiplier for the dynamic timeout with respect to the optimizer's plan as a baseline, used only when `dynamic_timeout = True`
         )

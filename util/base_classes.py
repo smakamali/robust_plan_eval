@@ -357,14 +357,27 @@ class Query:
         self.max_tables = len(self.id_tab)
         
     def encode(self):
-        self.parse()
+        try:
+            self.parse()
+        except:
+            raise(Exception("parsing faild"))
         # only needed if the default plan does not exist
         # assumes the id for the default plan is 0
-        if 0 not in self.plans.keys():
-            self.default_compile()
+        try:
+            if 0 not in self.plans.keys():
+                self.default_compile()
+        except:
+            raise(Exception("default_compile faild"))
 
-        self.ext_sample_info()
-        self.node_attr, self.edge_indc, self.edge_attr, self.graph_attr = query_encoder(self.schema, self.max_tables, self.sel, self.card, self.pred_count, self.giniCoefDict, self.cardToColDict, self.correlationsDict, self.joinIncsDict, self.joinTypesDict, self.joinFactorsDict, self.tables_dict, self.jpDF, self.id_tab)
+        try:
+            self.ext_sample_info()
+        except:
+            raise(Exception("ext_sample_info faild"))
+        
+        try:
+            self.node_attr, self.edge_indc, self.edge_attr, self.graph_attr = query_encoder(self.schema, self.max_tables, self.sel, self.card, self.pred_count, self.giniCoefDict, self.cardToColDict, self.correlationsDict, self.joinIncsDict, self.joinTypesDict, self.joinFactorsDict, self.tables_dict, self.jpDF, self.id_tab)
+        except:
+            raise(Exception("query_encoder faild"))
 
     def compile(self,hintset,hintset_id,gen_exp_output):
         with open(self.conn_str_path, "r") as conn_str_f:
