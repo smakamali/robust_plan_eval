@@ -163,12 +163,12 @@ def gen_label_plans(data_slice, schema_name, encFileID, conn_str_path, input_dir
 if __name__ == '__main__':
 
     gen_label_plans(
-        data_slice= slice(501,503), # Specify the max number of queries to explain
+        data_slice= slice(0,500), # Specify the max number of queries to explain
         schema_name = 'imdb', # schema name
-        encFileID = "job_syn_part3", # a unique id for the dataset
+        encFileID = "job_syn_p1", # a unique id for the dataset
         conn_str_path = './conn_str', # path to the file containing a connection string to the database
         input_dir = "./input/", # the directory that contains query.sql file(s)
-        opt_plan_path = './job_synt_plans/', # the path used to store explain outputs and guidelines
+        opt_plan_path = './job_synt_plans_p1/', # the path used to store explain outputs and guidelines
         internal_dir = './internal/', # the path to store intermediary files
         sample_size = 2000, # number of samples used per table
         timeout_thr = 30, # timeout threshold to avoid long running query/plans 

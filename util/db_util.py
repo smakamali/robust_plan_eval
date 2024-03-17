@@ -130,10 +130,10 @@ def db_result(statement):
 
 def db2_execute(sql,ibm_db_conn,guieline=None,
     def_timeout_threshold = 100):
-        
-    # add guideline to raw_sql
-    sql = sql +' /* '+ guieline + ' */;'
 
+    # add guideline to raw_sql
+    sql = sql.replace('\n',' ').replace(';','\n') +' /* '+ guieline + ' */;'
+    print(sql)
     stmt = ibm_db.prepare(ibm_db_conn, sql)
     rc = ibm_db.set_option(stmt, {ibm_db.SQL_ATTR_QUERY_TIMEOUT : def_timeout_threshold}, 0)
     
