@@ -2,9 +2,7 @@
 
 #  TODO: automate sample collection 
 #  TODO: specify a separate directory for output
-#  TODO: make extraction of join attractions from the input optional and limited to the max_num_queries
-#  TODO: should we continue running a query after its default plan has timed out?
-#  TODO: 
+# --> TODO: make extraction of join attractions from the input optional and limited to the max_num_queries -> add a db stats extraction in this script before loading queries.
 
 import os
 import shutil
@@ -81,8 +79,10 @@ def gen_label_plans(max_num_queries, schema_name, encFileID, conn_str_path, inpu
         try:
             q_id = query_ids[idx]
             
+            # initialize the query object
             query = Query(schema_name,sql,q_id,encFileID=encFileID, conn_str_path=conn_str_path,input_dir=input_dir, opt_plan_path=opt_plan_path,internal_dir=internal_dir,sample_size=sample_size)
             
+            # encode the query
             query.encode()
             
             for hintset_id, histset in enumerate(hintsets):
@@ -90,11 +90,12 @@ def gen_label_plans(max_num_queries, schema_name, encFileID, conn_str_path, inpu
                 print("compile query {} with hintset {}".format(str(idx),str(hintset_id)))
                 
                 try:
+                    # compile the query using the supplied hint set
                     query.compile(histset,hintset_id,gen_exp_output=False)
                     
                     query.plans[hintset_id].encode()
                     
-                    # warm up run to dampen the impact of cold buffer pool for the default plan
+                    # warm up run to dampen the impact of cold buffer pool for the first execution
                     if hintset_id == 0:
                         _ = query.execute(hintset=histset,
                         hintset_id=hintset_id, 
@@ -110,6 +111,7 @@ def gen_label_plans(max_num_queries, schema_name, encFileID, conn_str_path, inpu
                     if dynamic_timeout:
                         timeout_thr = math.ceil(max(timeout_thr,query.plans[0].latency*dynamic_timeout_factor))
                     
+                    # execute non-defaul plans
                     errorMsg = query.execute(hintset=histset,
                         hintset_id=hintset_id, 
                         ibm_db_conn=ibm_db_conn,timeout_thr=timeout_thr,
