@@ -32,7 +32,7 @@ hintsets=[
     ['db2 .opt set disable mgjn;\n', 'db2 .opt set disable hsjn;\n','db2 .opt set disable iscan;\n'],
     ]
 
-def gen_label_plans(max_num_queries, schema_name, encFileID, conn_str_path, input_dir='./input/', opt_plan_path='./optimizer_plans/', internal_dir='./internal/', sample_size=2000,timeout_thr=60, dynamic_timeout=False, dynamic_timeout_factor=5):
+def gen_label_plans(data_slice, schema_name, encFileID, conn_str_path, input_dir='./input/', opt_plan_path='./optimizer_plans/', internal_dir='./internal/', sample_size=2000,timeout_thr=60, dynamic_timeout=False, dynamic_timeout_factor=5):
 
     tic = time.time()
 
@@ -68,8 +68,8 @@ def gen_label_plans(max_num_queries, schema_name, encFileID, conn_str_path, inpu
     # load input queries
     queries, query_ids = load_input_queries(input_dir)
 
-    queries = queries[:max_num_queries]
-    query_ids = query_ids[:max_num_queries]
+    queries = queries[data_slice]
+    query_ids = query_ids[data_slice]
 
     query_success_id=0
     guide_success_id=0
@@ -163,9 +163,9 @@ def gen_label_plans(max_num_queries, schema_name, encFileID, conn_str_path, inpu
 if __name__ == '__main__':
 
     gen_label_plans(
-        max_num_queries = 500, # Specify the max number of queries to explain
+        data_slice= slice(501,503), # Specify the max number of queries to explain
         schema_name = 'imdb', # schema name
-        encFileID = "job_synt", # a unique id for the dataset
+        encFileID = "job_syn_part3", # a unique id for the dataset
         conn_str_path = './conn_str', # path to the file containing a connection string to the database
         input_dir = "./input/", # the directory that contains query.sql file(s)
         opt_plan_path = './job_synt_plans/', # the path used to store explain outputs and guidelines
