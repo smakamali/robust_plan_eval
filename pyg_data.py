@@ -72,7 +72,9 @@ class queryPlanPGDataset(InMemoryDataset):
             for j in query.plans.keys():
                 plan = query.plans[j]
                 plan_trees.append(plan.plan_tree)
-        prep_trees=prepare_trees(plan_trees,transformer, left_child, right_child, cuda=False)
+        # print("ql ------------->",queries_list[0].plans[0].guideline)
+        # print("ql ------------->",queries_list[0].plans[0].plan_tree.print())
+        prep_trees=prepare_trees(plan_trees, transformer, left_child, right_child, cuda=False)
         
         # create individual Data objects for each single sample
         # then put them in data_list
@@ -87,6 +89,7 @@ class queryPlanPGDataset(InMemoryDataset):
             for j in query.plans.keys():
                 
                 plan = query.plans[j]
+                plan_cost = plan.cost if plan.cost !='' else 0
                 
                 prep_tree_attr = prep_trees[0][prep_tree_id]
                 prep_tree_ord = prep_trees[1][prep_tree_id]
@@ -95,7 +98,7 @@ class queryPlanPGDataset(InMemoryDataset):
                 opt_plan = False
                 if plan.hintset_id == 0:
                     opt_plan = True
-
+                print(plan.cost)
                 data = Data(
                     x_s=torch.Tensor(query.node_attr),
                     edge_index_s=torch.Tensor(query.edge_indc),
@@ -107,7 +110,7 @@ class queryPlanPGDataset(InMemoryDataset):
                     query_id = query.q_id,
                     # num_joins = torch.Tensor(num_joins[i]),
                     opt_choice = torch.Tensor([opt_plan]),
-                    opt_cost = torch.Tensor([float(plan.cost)]),
+                    opt_cost = torch.Tensor([float(plan_cost)]),
                     y_t = torch.Tensor([plan.latency]),  # placeholder for transformed targets
                     num_nodes = torch.Tensor(query.node_attr).shape[0], 
                     # purturbed_runtimes = torch.Tensor(purturbed_runtimes[i]),
