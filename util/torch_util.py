@@ -287,3 +287,19 @@ def genLayerSizes(inputNumFeat = 12, firstLayerSize = 600, LastLayerSize = 30):
             layers.append([layersizes[idx], layersizes[idx+1]])
     # print(layers)
     return layers
+
+# Enables variational inference using MC dropout
+import torch.nn as nn
+import pytorch_lightning as pl
+
+class LitMCdropoutModel(pl.LightningModule):
+    def __init__(self, model, mc_iteration = 10, dropout = 0.1):
+        super().__init__()
+        self.model = model
+        self.mc_iteration = mc_iteration
+    def predict_step(self, batch, batch_idx):
+        for name, layer in self.model.named_modules():
+            if isinstance(layer, nn.Dropout):
+                layer.train(True)
+        preds = [self.model(batch).squeeze().tolist() for _ in range(self.mc_iteration)]
+        return preds
