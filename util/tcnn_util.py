@@ -96,6 +96,9 @@ def xmltotree(xmlroot):
             left,right = getXMLChildren(xmlroot)
             tre.leftChild = xmltotree(left)
             tre.rightChild = xmltotree(right)
+        else:
+            tre.leftChild = None
+            tre.rightChild = None
         return tre
 
 
