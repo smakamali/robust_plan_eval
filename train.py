@@ -1,6 +1,7 @@
 ####################### TRAIN ROQ ###########################
 # TODO: find a way to disable logging
 
+import os
 import time
 import pickle
 import torch
@@ -13,8 +14,9 @@ import pytorch_lightning as pl
 from lcm.roq_model import lcm_pl as roq
 from lcm.neo_bao_model import lcm_pl as neo_bao
 
+models_path = os.path.join('.','lightning_models')
 
-def experiment(experiment_id = 'job', architecture_p = 'bao',
+def train(experiment_id = 'job', architecture_p = 'roq', files_id = 'temp',
          max_epochs = 1000, patience = 100, num_experiments = 5, num_workers = 10, seed = 0, reload_data = False):
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -69,44 +71,40 @@ def experiment(experiment_id = 'job', architecture_p = 'bao',
 
     # Load train,v alidation, and test datasets
     print("loading train")
-    train_set = queryPlanPGDataset(split= 'train', files_id = 'job_main', force_reload=reload_data, val_samples = 0.1, test_samples = 0.1, seed = seed)
+    train_set = queryPlanPGDataset(split= 'train', files_id = files_id, force_reload=reload_data, val_samples = 0.1, test_samples = 0.1, seed = seed)
     print("Number of queries in training dataset: ",train_set.len())
     print("loading val")
-    val_set = queryPlanPGDataset(split= 'val', files_id = 'job_main')
+    val_set = queryPlanPGDataset(split= 'val', files_id = files_id)
     print("Number of queries in vlidation dataset: ",val_set.len())
     print("loading test")
-    test_set = queryPlanPGDataset(split= 'test', files_id = 'job_main',)
+    test_set = queryPlanPGDataset(split= 'test', files_id = files_id,)
     print("Number of queries in test dataset: ",test_set.len())
 
-    meanEdge, minEdge, maxEdge = getStats(train_set.edge_attr_s)
-    uniqueCols = (minEdge == maxEdge)
-    train_set._data.edge_attr_s = train_set.edge_attr_s[:,~uniqueCols]
-    val_set._data.edge_attr_s = val_set.edge_attr_s[:,~uniqueCols]
-    test_set._data.edge_attr_s = test_set.edge_attr_s[:,~uniqueCols]
+    # Perform data transformations on inputs 
+    drop_const = dropConst(train_set)
+    train_set = drop_const(train_set)
+    val_set = drop_const(val_set)
+    test_set = drop_const(test_set)
 
+    null_imp = nullImputation(train_set)
+    train_set = null_imp(train_set)
+    val_set = null_imp(val_set)
+    test_set = null_imp(test_set)
 
-    meanNode_s, minNode_s, maxNode_s = getStats(train_set.x_s)
-    meanEdge, minEdge, maxEdge = getStats(train_set.edge_attr_s)
+    minmax_scale = minmaxScale(train_set)
+    train_set = minmax_scale(train_set)
+    val_set = minmax_scale(val_set)
+    test_set = minmax_scale(test_set)
 
-    nullImpFunc = NullImputation(meanNode=meanNode_s, meanEdge=meanEdge)
-    train_set = nullImpFunc(train_set)
-    val_set = nullImpFunc(val_set)
-    test_set = nullImpFunc(test_set)
-
-    inputTransFunc = inputTransform(nodeRange_s = (minNode_s,maxNode_s),
-                                edgeRange= (minEdge,maxEdge))
-    train_set = inputTransFunc(train_set)
-    val_set = inputTransFunc(val_set)
-    test_set = inputTransFunc(test_set)
-
+    # Perform data transformations on targets 
     if 'roq' in architecture_p:
-        yTransFunc = target_log_transform(train_set.y)
+        yTransFunc = target_log_transform(train_set)
     else:
-        yTransFunc = target_transform(train_set.y)
+        yTransFunc = target_transform(train_set)
 
-    train_set._data.y_t = yTransFunc.transform(train_set.y)
-    val_set._data.y_t = yTransFunc.transform(val_set.y)
-    test_set._data.y_t = yTransFunc.transform(test_set.y)
+    train_set = yTransFunc.transform(train_set)
+    val_set = yTransFunc.transform(val_set)
+    test_set = yTransFunc.transform(test_set)
 
     plan_attr_shape = train_set[0].plan_attr.shape
     plan_ord_shape = train_set[0].plan_ord.shape
@@ -214,7 +212,7 @@ def experiment(experiment_id = 'job', architecture_p = 'bao',
         toc = time.time()
         training_time.append(toc-tic)
 
-    with open('./lightning_models/best_model_paths_{}_{}.pkl'.format(architecture_p,experiment_id), 'wb') as file:
+    with open(os.path.join(models_path,'best_model_paths_{}_{}.pkl'.format(architecture_p,experiment_id)), 'wb') as file:
         pickle.dump(best_model_paths, file)
 
     return training_time
@@ -225,10 +223,11 @@ if __name__ == '__main__':
     # from multiprocessing import freeze_support
     # freeze_support()
 
-    experiment(
+    train(
         experiment_id = 'temp', 
-        architecture_p = 'bao',
-        max_epochs = 100, 
+        architecture_p = 'roq',
+        files_id='job_syn_p4',
+        max_epochs = 50, 
         patience = 100, 
         num_experiments = 1, 
         num_workers = 10, 
