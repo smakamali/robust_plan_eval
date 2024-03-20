@@ -1,7 +1,7 @@
 ####################### TEST ROQ #######################
 
-# TODO: change best model path files to text
 # TODO: read model configs from disk
+# TODO: remove target transformation if it is not needed
 
 import os
 import pickle
@@ -23,6 +23,7 @@ from util.eval_util import *
 num_workers = 10
 
 models_path = os.path.join('.','lightning_models')
+results_dir = os.path.join('.','results')
 
 roq_config ={'TCNNin': 64,
  'TCNNout': 32,
@@ -82,8 +83,8 @@ def test(experiment_id = 'job',architecture_p = 'roq',
     print("Device used for inference:",str(device).upper())
 
     # create results dir if it does not exist
-    if not os.path.exists('./results'):
-        os.mkdir('./results')
+    if not os.path.exists(results_dir):
+        os.mkdir(results_dir)
 
     # loading model paths
     best_model_paths = load_best_model_paths('roq',experiment_id)
@@ -126,15 +127,9 @@ def test(experiment_id = 'job',architecture_p = 'roq',
     val_set = minmax_scale(val_set)
     test_set = minmax_scale(test_set)
 
-    # Perform data transformations on targets 
-    if 'roq' in architecture_p:
-        yTransFunc = target_log_transform(train_set)
-    else:
-        yTransFunc = target_transform(train_set)
-
-    train_set = yTransFunc.transform(train_set)
-    val_set = yTransFunc.transform(val_set)
-    test_set = yTransFunc.transform(test_set)
+    # Initialize data transformations on targets 
+    yTransFunc_log = target_log_transform(train_set)
+    yTransFunc = target_transform(train_set)
 
     # Capture node, edge, graph, and plan attribute shapes to initialize the model 
     plan_attr_shape = train_set[0].plan_attr.shape
@@ -230,6 +225,11 @@ def test(experiment_id = 'job',architecture_p = 'roq',
             **bao_config
             )
 
+        # Transform targets for Roq
+        train_set = yTransFunc_log.transform(train_set)
+        val_set = yTransFunc_log.transform(val_set)
+        test_set = yTransFunc_log.transform(test_set)
+
         # Enables variational inference using MC dropout
         LitMCDPModel = LitMCdropoutModel(
             model, mc_iteration=10, 
@@ -252,18 +252,17 @@ def test(experiment_id = 'job',architecture_p = 'roq',
         # Test
         ypreds_test = trainer.predict(model, test_loader)
         ypreds_arr_test = torch.vstack(ypreds_test).numpy()
-        ypreds_tens_test_org=yTransFunc.inverse_transform(torch.Tensor(ypreds_arr_test))
+        ypreds_tens_test_org=yTransFunc_log.inverse_transform(torch.Tensor(ypreds_arr_test))
 
         ypreds_test_mc = trainer.predict(LitMCDPModel, test_loader)
         ypreds_test_mc = torch.hstack([torch.Tensor(ypreds_test_mc[b]) for b in range(len(ypreds_test_mc))])
 
         ypreds_test_m, ypreds_test_Ud, ypreds_test_Um = comput_uncertainty(ypreds_test_mc)
-        ypreds_test_m_org=yTransFunc.inverse_transform(torch.Tensor(ypreds_test_m))
+        ypreds_test_m_org=yTransFunc_log.inverse_transform(torch.Tensor(ypreds_test_m))
 
         ########## Make predication for Neo and Bao ##########
 
-        # Replace the transformed targets with ones suitable for vanilla models
-        yTransFunc = target_transform(train_set)
+        # Replace the transformed targets with ones suitable for Neo and Bao
         train_set = yTransFunc.transform(train_set)
         val_set = yTransFunc.transform(val_set)
         test_set = yTransFunc.transform(test_set)
@@ -769,27 +768,26 @@ def test(experiment_id = 'job',architecture_p = 'roq',
 
 
 
-    with open('./results/qerror_dict_{}.pkl'.format(experiment_id), 'wb') as file:
+    with open(os.path.join(results_dir,'qerror_dict_{}.pkl'.format(experiment_id)), 'wb') as file:
         pickle.dump(qerror_dict, file)
 
-    with open('./results/corr_dict_{}.pkl'.format(experiment_id), 'wb') as file:
+    with open(os.path.join(results_dir,'corr_dict_{}.pkl'.format(experiment_id)), 'wb') as file:
         pickle.dump(corr_dict, file)
 
-    with open('./results/rt_res_dict_{}.pkl'.format(experiment_id), 'wb') as file:
+    with open(os.path.join(results_dir,'rt_res_dict_{}.pkl'.format(experiment_id)), 'wb') as file:
         pickle.dump(rt_res_dict, file)
 
-    with open('./results/so_res_dict_{}.pkl'.format(experiment_id), 'wb') as file:
+    with open(os.path.join(results_dir,'so_res_dict_{}.pkl'.format(experiment_id)), 'wb') as file:
         pickle.dump(so_res_dict, file)
 
-    with open('./results/agg_res_dict_{}.pkl'.format(experiment_id), 'wb') as file:
+    with open(os.path.join(results_dir,'agg_res_dict_{}.pkl'.format(experiment_id)), 'wb') as file:
         pickle.dump(agg_res_dict, file)
 
 if __name__ == '__main__':
 
     test(
-        experiment_id = 'job',
-        architecture_p = 'roq',
-        files_id = 'job_syn_p4',
+        experiment_id = 'job_syn',
+        files_id = 'job_syn_all',
         try_gpu_inf=True,
         seed = 0, 
         num_workers=num_workers,

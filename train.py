@@ -188,7 +188,7 @@ def train(experiment_id = 'job', architecture_p = 'roq', files_id = 'temp', labe
         logger = pl.loggers.TensorBoardLogger('./lightning_logs', name = model_name)
         
         checkpointing = pl.callbacks.ModelCheckpoint(
-            dirpath='./lightning_models/',
+            dirpath=models_path,
             monitor='val_loss',
             save_top_k = 1,
             filename=model_name+'{epoch}-{step}-{val_loss:.2f}',
@@ -225,7 +225,7 @@ if __name__ == '__main__':
 
     train(
         experiment_id = 'temp', 
-        architecture_p = 'roq',
+        architecture_p = 'bao',
         files_id='job_syn_all',
         labeled_data_dir='./labeled_data',
         max_epochs = 50, 
