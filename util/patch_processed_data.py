@@ -2,34 +2,7 @@
 
 import os
 import pickle
-from util.util import find_between
-from util.base_classes import tabid2tab, binarize_xml_tree
-from util.tcnn_util import featurizetree, xmltotree
-import xml.etree.ElementTree as ET
-
-def binarize_xml_tree(root):
-    if len(root) == 1:
-        # Create a new child element for the root
-        new_child = ET.Element("Null")
-        root.append(new_child)
-    
-    for elem in root:
-        if len(elem) == 1:
-            # Create a new child element
-            new_child = ET.Element("Null")
-            elem.append(new_child)
-        else:
-            # If the current element has more than one child, recursively call the function
-            binarize_xml_tree(elem)
-
-def gltemplatetotree(string,tab_alias_dict):
-    gl = find_between(string,'<OPTGUIDELINES>','</OPTGUIDELINES>')
-    root = ET.fromstring(gl)
-    binarize_xml_tree(root)
-    featurizetree(root,tab_alias_dict)
-    tree = xmltotree(root)
-
-    return tree
+from util.base_classes import tabid2tab, gltemplatetotree
 
 def patch(file_path, patched_file_path):
 

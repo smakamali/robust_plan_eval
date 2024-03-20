@@ -16,6 +16,7 @@ output_path = os.path.join(labeled_data_dir,'labeled_query_plans_{}.pickle'.form
 
 queries_lists = []
 labeled_data_dir_enc = os.fsencode(labeled_data_dir)
+
 for file in os.listdir(labeled_data_dir_enc):
     
     filename = os.fsdecode(file)

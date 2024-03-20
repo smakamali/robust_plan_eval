@@ -32,7 +32,7 @@ hintsets=[
     ['db2 .opt set disable mgjn;\n', 'db2 .opt set disable hsjn;\n','db2 .opt set disable iscan;\n'],
     ]
 
-def gen_label_plans(data_slice, schema_name, encFileID, conn_str_path, input_dir='./input/', opt_plan_path='./optimizer_plans/', internal_dir='./internal/', sample_size=2000,timeout_thr=60, dynamic_timeout=False, dynamic_timeout_factor=5):
+def gen_label_plans(data_slice, schema_name, encFileID, conn_str_path, input_dir='./input/', opt_plan_path='./optimizer_plans/', internal_dir='./internal/',labeled_data_dir='./labeled_data', sample_size=2000,timeout_thr=60, dynamic_timeout=False, dynamic_timeout_factor=5):
 
     tic = time.time()
 
@@ -56,6 +56,10 @@ def gen_label_plans(data_slice, schema_name, encFileID, conn_str_path, input_dir
     if not os.path.exists(internal_dir):
         os.mkdir(internal_dir)
         print("\n" + internal_dir + " Created...\n")
+
+    if not os.path.exists(labeled_data_dir):
+        os.mkdir(labeled_data_dir)
+        print("\n" + labeled_data_dir + " Created...\n")
 
     err_files_path = os.path.join(internal_dir,'error_files_{}'.format(encFileID))
     with open(err_files_path, 'w') as f:
@@ -135,7 +139,7 @@ def gen_label_plans(data_slice, schema_name, encFileID, conn_str_path, input_dir
         
         # checkpoint - write to disk every 100 query
         if query_success_id%5:
-            with open(os.path.join(internal_dir,'labeled_query_plans_{}.pickle'.format(encFileID)), 'wb') as f:
+            with open(os.path.join(labeled_data_dir,'labeled_query_plans_{}.pickle'.format(encFileID)), 'wb') as f:
                 pickle.dump(query_list, f)
 
         # Unsuccessful compiles leads to creating Db2 dump file that eats up space. This code block periodically clears the dump files.
@@ -149,7 +153,7 @@ def gen_label_plans(data_slice, schema_name, encFileID, conn_str_path, input_dir
 
 
     # final write to disk
-    with open(os.path.join(internal_dir,'labeled_query_plans_{}.pickle'.format(encFileID)),'wb') as f:
+    with open(os.path.join(labeled_data_dir,'labeled_query_plans_{}.pickle'.format(encFileID)),'wb') as f:
         pickle.dump(query_list, f)
 
     toc = time.time()
@@ -163,13 +167,14 @@ def gen_label_plans(data_slice, schema_name, encFileID, conn_str_path, input_dir
 if __name__ == '__main__':
 
     gen_label_plans(
-        data_slice= slice(4500,5000), # Specify the max number of queries to explain
+        data_slice= slice(5000,5001), # Specify the max number of queries to explain
         schema_name = 'imdb', # schema name
-        encFileID = "job_syn_p10", # a unique id for the dataset
+        encFileID = "job_syn_p11_temp", # a unique id for the dataset
         conn_str_path = './conn_str', # path to the file containing a connection string to the database
         input_dir = "./input/", # the directory that contains query.sql file(s)
-        opt_plan_path = './job_synt_plans_p10/', # the path used to store explain outputs and guidelines
+        opt_plan_path = './job_synt_plans_p11/', # the path used to store explain outputs and guidelines
         internal_dir = './internal/', # the path to store intermediary files
+        labeled_data_dir = './labeled_data',
         sample_size = 2000, # number of samples used per table
         timeout_thr = 30, # timeout threshold to avoid long running query/plans 
         dynamic_timeout = False, # determines whether dynamic timeout is used 
