@@ -1,4 +1,4 @@
-# This script takes a processed pyg dataset and fixes the guideline xml and its encoding. This is needed for datasets generated using code prior to commit: cdd7556
+# This script takes a processed Query/Plan dataset list and fixes the guideline xml and its encoding. This is needed for datasets generated using code prior to commit: cdd7556
 
 import os
 import pickle
