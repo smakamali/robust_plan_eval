@@ -12,10 +12,10 @@ from util.tcnn_util import prepare_trees, transformer, left_child, right_child
 class queryPlanPGDataset(InMemoryDataset):
     def __init__(self, root='./',  split: str = "train", 
                  transform=None, pre_transform=None, 
-                 pre_filter=None, force_reload = False,files_id=None, internal_dir='./internal/',
+                 pre_filter=None, force_reload = False,files_id=None, labeled_data_dir='./internal/',
                  seed = 0, num_samples = None, val_samples = 0.1, test_samples = 0.1):
         self.files_id = files_id
-        self.internal_dir = internal_dir
+        self.labeled_data_dir = labeled_data_dir
         self.seed = seed
         self.num_samples = num_samples
         self.val_samples = val_samples
@@ -37,7 +37,7 @@ class queryPlanPGDataset(InMemoryDataset):
             
     @property
     def raw_file_names(self):
-        return [os.path.join(self.internal_dir,'labeled_query_plans_{}.pickle'.format(self.files_id))
+        return [os.path.join(self.labeled_data_dir,'labeled_query_plans_{}.pickle'.format(self.files_id))
                ]
 
     @property

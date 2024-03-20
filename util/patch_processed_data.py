@@ -31,26 +31,30 @@ def gltemplatetotree(string,tab_alias_dict):
 
     return tree
 
+def patch(file_path, patched_file_path):
 
-files_id = 'job_syn_p4'
-internal_dir = './internal/'
+    with open(file_path,'rb') as f:
+        queries_list = pickle.load(f)
 
-file_path = os.path.join(internal_dir,'labeled_query_plans_{}.pickle'.format(files_id))
-patched_file_path = os.path.join(internal_dir,'labeled_query_plans_{}_patched.pickle'.format(files_id))
+    for idx,query in enumerate(queries_list):
+        for hint_id in query.plans.keys():
+            print("query",idx,"hint",hint_id) 
+            plan = query.plans[hint_id]
+            guideline = tabid2tab(plan.guideline, plan.tab_alias_dict)
+            query.plans[hint_id].plan_tree = gltemplatetotree(guideline, plan.id_tab)
 
-with open(file_path,'rb') as f:
-    queries_list = pickle.load(f)
+    # write patched file to disk
+    with open(patched_file_path,'wb') as f:
+        pickle.dump(queries_list, f)
 
-for idx,query in enumerate(queries_list):
-    for hint_id in query.plans.keys():
-        print("query",idx,"hint",hint_id) 
-        plan = query.plans[hint_id]
-        guideline = tabid2tab(plan.guideline, plan.tab_alias_dict)
-        query.plans[hint_id].plan_tree = gltemplatetotree(guideline, plan.id_tab)
+if __name__ == '__main__':
 
-# write patched file to disk
-with open(file_path,'wb') as f:
-    pickle.dump(queries_list, f)
+    files_id = 'job_syn_p4'
+    internal_dir = './internal/'
 
+    file_path = os.path.join(internal_dir,'labeled_query_plans_{}.pickle'.format(files_id))
+    patched_file_path = os.path.join(internal_dir,'labeled_query_plans_patched_{}.pickle'.format(files_id))
+
+    patch(file_path, patched_file_path)
 
 

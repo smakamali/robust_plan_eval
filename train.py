@@ -16,7 +16,7 @@ from lcm.neo_bao_model import lcm_pl as neo_bao
 
 models_path = os.path.join('.','lightning_models')
 
-def train(experiment_id = 'job', architecture_p = 'roq', files_id = 'temp',
+def train(experiment_id = 'job', architecture_p = 'roq', files_id = 'temp', labeled_data_dir = './labeled_data/',
          max_epochs = 1000, patience = 100, num_experiments = 5, num_workers = 10, seed = 0, reload_data = False):
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -71,13 +71,13 @@ def train(experiment_id = 'job', architecture_p = 'roq', files_id = 'temp',
 
     # Load train,v alidation, and test datasets
     print("loading train")
-    train_set = queryPlanPGDataset(split= 'train', files_id = files_id, force_reload=reload_data, val_samples = 0.1, test_samples = 0.1, seed = seed)
+    train_set = queryPlanPGDataset(split= 'train', files_id = files_id, labeled_data_dir=labeled_data_dir,  force_reload=reload_data, val_samples = 0.1, test_samples = 0.1, seed = seed)
     print("Number of queries in training dataset: ",train_set.len())
     print("loading val")
     val_set = queryPlanPGDataset(split= 'val', files_id = files_id)
     print("Number of queries in vlidation dataset: ",val_set.len())
     print("loading test")
-    test_set = queryPlanPGDataset(split= 'test', files_id = files_id,)
+    test_set = queryPlanPGDataset(split= 'test', files_id = files_id)
     print("Number of queries in test dataset: ",test_set.len())
 
     # Perform data transformations on inputs 
@@ -226,7 +226,8 @@ if __name__ == '__main__':
     train(
         experiment_id = 'temp', 
         architecture_p = 'roq',
-        files_id='job_syn_p4',
+        files_id='job_syn_all',
+        labeled_data_dir='./labeled_data',
         max_epochs = 50, 
         patience = 100, 
         num_experiments = 1, 
