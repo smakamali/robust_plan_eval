@@ -1,6 +1,7 @@
+# This script takes a processed pyg dataset and fixes the guideline xml and its encoding. This is needed for datasets generated using code prior to commit: cdd7556
+
 import os
 import pickle
-import numpy as np
 from util.util import find_between
 from util.base_classes import tabid2tab, binarize_xml_tree
 from util.tcnn_util import featurizetree, xmltotree

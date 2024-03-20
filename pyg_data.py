@@ -98,7 +98,7 @@ class queryPlanPGDataset(InMemoryDataset):
                 opt_plan = False
                 if plan.hintset_id == 0:
                     opt_plan = True
-                print(plan.cost)
+                
                 data = Data(
                     x_s=torch.Tensor(query.node_attr),
                     edge_index_s=torch.Tensor(query.edge_indc),
@@ -108,7 +108,7 @@ class queryPlanPGDataset(InMemoryDataset):
                     plan_attr=torch.Tensor(prep_tree_attr),
                     plan_ord=torch.Tensor(prep_tree_ord),
                     query_id = query.q_id,
-                    # num_joins = torch.Tensor(num_joins[i]),
+                    num_joins = torch.Tensor([int(query.edge_attr.shape[1]/2)]),
                     opt_choice = torch.Tensor([opt_plan]),
                     opt_cost = torch.Tensor([float(plan_cost)]),
                     y_t = torch.Tensor([plan.latency]),  # placeholder for transformed targets

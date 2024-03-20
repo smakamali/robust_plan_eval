@@ -1,5 +1,5 @@
 ####################### TRAIN ROQ ###########################
-# TODO: find a way to disable logging
+# TODO: find a way to disable tensorboard logging
 
 import os
 import time
