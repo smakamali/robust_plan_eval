@@ -7,7 +7,56 @@ import scipy.stats as st
 from scipy.stats import spearmanr
 from scipy.stats import pearsonr
 from IPython.display import display
-from util.util import plot_dist_line
+
+def describe_plot(arrays,titles,metric_label,plot_title,log_scale = True,figsize=[10,6],plot_x_every=5,save_to=None,bbox_to_anchor=None,show_fig=True):
+    arrays = np.array(arrays).T
+    data = pd.DataFrame(arrays,columns=titles)
+    data = data.describe(percentiles=np.arange(0,1,0.01))
+    plot_dist_line(data,metric_label,plot_title,log_scale,figsize=figsize,
+    plot_x_every=plot_x_every,save_to=save_to,bbox_to_anchor=bbox_to_anchor,show_fig=show_fig)
+
+def plot_step_curve(arrays,titles,scale='log',title='Workload Runtime',mask=None,figsize=[10,6],
+                    save_to=None,bbox_to_anchor=None,show_fig=True):
+    fig = plt.figure(figsize=figsize)
+    for idx,array in enumerate(arrays):
+        if mask is not None:
+            array = array[mask]
+        # array = np.sort(array)
+        x = np.arange(array.shape[0])
+        y = array.cumsum()
+        plt.step(x, y + 2, label=titles[idx])
+    plt.yscale(scale)
+    plt.grid(axis='x', color='0.95')
+    plt.legend(bbox_to_anchor=bbox_to_anchor)
+    plt.title(title)
+    plt.xlabel('Queries')
+    plt.ylabel('Runtime (s)')
+    if save_to is not None:
+        plt.savefig(save_to,bbox_inches='tight',dpi=300)
+    if show_fig:
+        plt.show()
+
+def plot_dist_line(data,metric_label,title,log_scale = True,
+figsize=[10,6],plot_x_every=5,save_to=None,bbox_to_anchor=None,show_fig=True):
+    index = [ind for ind in data.index if ind not in ["max","min","count","mean","std"]]
+    indexPos = np.arange(len(index))
+    fig = plt.figure(figsize=figsize)
+    plt.plot(data.loc[index])
+    plt.legend(data.columns, bbox_to_anchor=bbox_to_anchor)
+    x = index
+    y = [0]*len(index)
+    plt.plot(x,y,color = 'tab:red')
+    plt.xticks(ticks = indexPos[::plot_x_every], labels = index[::plot_x_every])
+    if log_scale:
+        plt.yscale('log')
+    plt.grid(visible=True,which='both',axis='both')
+    plt.title(title)
+    plt.ylabel(metric_label)
+    if save_to is not None:
+        plt.savefig(save_to,bbox_inches='tight',dpi=300)
+    if show_fig:
+        plt.show()
+
 
 def compare2methods(runtime1,runtime2):
     assert (runtime1.shape[0] == runtime2.shape[0])

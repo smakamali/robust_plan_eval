@@ -71,7 +71,9 @@ def train(experiment_id = 'job', architecture_p = 'roq', files_id = 'temp', labe
 
     # Load train,v alidation, and test datasets
     print("loading train")
-    train_set = queryPlanPGDataset(split= 'train', files_id = files_id, labeled_data_dir=labeled_data_dir,  force_reload=reload_data, val_samples = 0.1, test_samples = 0.1, seed = seed)
+    train_set = queryPlanPGDataset(
+        split= 'train', files_id = files_id, labeled_data_dir=labeled_data_dir,  force_reload=reload_data, val_samples = 0.05, test_samples = 0.05, seed = seed
+        )
     print("Number of queries in training dataset: ",train_set.len())
     print("loading val")
     val_set = queryPlanPGDataset(split= 'val', files_id = files_id)
@@ -231,7 +233,7 @@ if __name__ == '__main__':
         max_epochs = 50, 
         patience = 100, 
         num_experiments = 1, 
-        num_workers = 10, 
+        num_workers = 3, 
         seed = 0,
-        reload_data = False,
+        reload_data = True,
         )

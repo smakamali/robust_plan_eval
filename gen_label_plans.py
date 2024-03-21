@@ -161,18 +161,18 @@ def gen_label_plans(data_slice, schema_name, encFileID, conn_str_path, input_dir
     print("********  Processing all queries is done!  ********")
     print(query_success_id, "queries were processed.")
     print(guide_success_id, "explains and guidelines were created.")
-    print("Time to generate and label each sample: {} seconds".format((toc-tic)/query_success_id))
+    print("Time to generate and label per query: {} seconds".format((toc-tic)/query_success_id))
     print()
 
 if __name__ == '__main__':
 
     gen_label_plans(
-        data_slice= slice(5000,5001), # Specify the max number of queries to explain
+        data_slice= slice(6000,7000), # Specify the max number of queries to explain
         schema_name = 'imdb', # schema name
-        encFileID = "job_syn_p11_temp", # a unique id for the dataset
+        encFileID = "job_syn_p13", # a unique id for the dataset
         conn_str_path = './conn_str', # path to the file containing a connection string to the database
         input_dir = "./input/", # the directory that contains query.sql file(s)
-        opt_plan_path = './job_synt_plans_p11/', # the path used to store explain outputs and guidelines
+        opt_plan_path = './job_synt_plans_p13/', # the path used to store explain outputs and guidelines
         internal_dir = './internal/', # the path to store intermediary files
         labeled_data_dir = './labeled_data',
         sample_size = 2000, # number of samples used per table
