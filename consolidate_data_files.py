@@ -9,7 +9,7 @@ from util.patch_processed_data import patch
 
 labeled_data_dir = './labeled_data/'
 output_file_id = 'job_syn_all'
-patch_flag = True
+patch_flag = False
 
 temp_path = os.path.join(labeled_data_dir,'temp.pickle')
 output_path = os.path.join(labeled_data_dir,'labeled_query_plans_{}.pickle'.format(output_file_id))
@@ -34,7 +34,8 @@ for file in os.listdir(labeled_data_dir_enc):
     with open(temp_path,'rb') as f:
         queries_lists.extend(pickle.load(f))
 
-os.remove(temp_path)
+    if patch_flag:
+        os.remove(temp_path)
 
 # write patched file to disk
 print("Writing to ", output_path)
