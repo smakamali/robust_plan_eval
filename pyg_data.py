@@ -1,8 +1,12 @@
+# TODO: add functionality to sample test samples from long running queries
+# TODO: the slicing of data splits is not done properly
+
 import os
 import pickle
 import math
 from itertools import compress
 import numpy as np
+import pandas as pd
 import torch
 from torch_geometric.data import Data
 from sklearn.model_selection import train_test_split
@@ -15,7 +19,7 @@ class queryPlanPGDataset(InMemoryDataset):
     def __init__(self, root='./',  split: str = "train", 
                  transform=None, pre_transform=None, 
                  pre_filter=None, force_reload = False,files_id=None, labeled_data_dir='./labeled_data/',
-                 seed = 0, num_samples = None, val_samples = 0.1, test_samples = 0.1):
+                 seed = 0, num_samples = None, val_samples = 0.1, test_samples = 0.01):
         self.files_id = files_id
         self.labeled_data_dir = labeled_data_dir
         self.seed = seed
@@ -82,6 +86,8 @@ class queryPlanPGDataset(InMemoryDataset):
         # then put them in data_list
         data_list = []
         query_ids = []
+        opt_plan_msk = []
+        plan_latency_list = []
         prep_tree_id = 0
         for i,query in enumerate(queries_list):
             if i%5 == 0:
@@ -92,6 +98,7 @@ class queryPlanPGDataset(InMemoryDataset):
                 plan = query.plans[j]
                 plan_cost = plan.cost if plan.cost !='' else 0
                 plan_latency = plan.latency if plan.latency is not None else 0
+                plan_latency_list.append(plan_latency)
                 
                 prep_tree_attr = prep_trees[0][prep_tree_id]
                 prep_tree_ord = prep_trees[1][prep_tree_id]
@@ -100,7 +107,8 @@ class queryPlanPGDataset(InMemoryDataset):
                 opt_plan = False
                 if plan.hintset_id == 0:
                     opt_plan = True
-                
+                opt_plan_msk.append(opt_plan)
+
                 data = Data(
                     x_s=torch.Tensor(query.node_attr),
                     edge_index_s=torch.Tensor(query.edge_indc),
@@ -128,23 +136,56 @@ class queryPlanPGDataset(InMemoryDataset):
         if self.pre_transform is not None:
             data_list = [self.pre_transform(data) for data in data_list]
         
-        # get test and validation splits from samples that have purturbed runtimes captured for evaluation purposes
-        query_ids_unique = np.unique(np.array(query_ids))
+        # convert lists to arrays
+        plan_latency_list = np.array(plan_latency_list)
+        opt_plan_msk = np.array(opt_plan_msk)
+        query_ids = np.array(query_ids)
 
-        train_val_qid, test_qid = train_test_split(
-            query_ids_unique,
-            test_size=self.test_samples,
+        # get unique query ids
+        query_ids_unique = pd.unique(query_ids)
+
+        # transform ratio sample sizes to numbers
+        if self.test_samples <= 1:
+            self.test_samples = int(self.test_samples*query_ids_unique.shape[0])
+            self.val_samples = int(self.val_samples*query_ids_unique.shape[0])
+
+        # get query ids for long running queries
+        opt_plan_latency=plan_latency_list[opt_plan_msk]
+        long_running_msk = (opt_plan_latency>np.percentile(opt_plan_latency,q=99))
+        long_running_qids = query_ids_unique[long_running_msk]
+        non_long_qids = query_ids_unique[~long_running_msk]
+
+        # sample part 1 from long running queries
+        train_val_qid1, test_qid1 = train_test_split(
+            long_running_qids,test_size=0.5,
+            random_state=self.seed, shuffle=True
+            ) # gets 1/2 of all long running queries
+
+        test_samples2 = int(self.test_samples - test_qid1.shape[0])
+
+        # sample part 2 from non-long running queries
+        train_val_qid2, test_qid2 = train_test_split(
+            non_long_qids,
+            test_size=test_samples2,
             random_state=self.seed, shuffle=True
             )
-        train_qid, val_qid=train_test_split(train_val_qid, 
+        
+        # get the unions for short/long running query ids
+        test_qid = np.union1d(test_qid1,test_qid2)
+        train_val_qid = np.union1d(train_val_qid1,train_val_qid2)
+
+        # get val split query ids
+        train_qid, val_qid=train_test_split(
+            train_val_qid,
             test_size=self.val_samples,
             random_state=self.seed, shuffle=True
             )
         
-        train_slice = (np.isin(query_ids, train_qid))
-        val_slice = (np.isin(query_ids, val_qid))
-        test_slice = (np.isin(query_ids, test_qid))
-
+        # get split slices
+        train_slice = np.isin(query_ids, train_qid)
+        val_slice = np.isin(query_ids, val_qid)
+        test_slice = np.isin(query_ids, test_qid)
+        
         tr_data, tr_slices = self.collate(list(compress(data_list, train_slice)))
         torch.save((tr_data, tr_slices), self.processed_paths[0])
         
@@ -152,5 +193,6 @@ class queryPlanPGDataset(InMemoryDataset):
         torch.save((val_data, val_slices), self.processed_paths[1])
         
         ts_data, ts_slices = self.collate(list(compress(data_list, test_slice)))
+
         torch.save((ts_data, ts_slices), self.processed_paths[2])
 
