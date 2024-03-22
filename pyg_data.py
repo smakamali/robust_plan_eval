@@ -1,5 +1,4 @@
-# TODO: add functionality to sample test samples from long running queries
-# TODO: the slicing of data splits is not done properly
+# TODO: Make sampling test from long running optional
 
 import os
 import pickle

@@ -74,13 +74,13 @@ def train(experiment_id = 'job', architecture_p = 'roq', files_id = 'temp', labe
     train_set = queryPlanPGDataset(
         split= 'train', files_id = files_id, labeled_data_dir=labeled_data_dir,  force_reload=reload_data, val_samples = 0.05, test_samples = 0.05, seed = seed
         )
-    print("Number of queries in training dataset: ",train_set.len())
+    print("Number of samples in training dataset: ",train_set.len())
     print("loading val")
     val_set = queryPlanPGDataset(split= 'val', files_id = files_id)
-    print("Number of queries in vlidation dataset: ",val_set.len())
+    print("Number of samples in vlidation dataset: ",val_set.len())
     print("loading test")
     test_set = queryPlanPGDataset(split= 'test', files_id = files_id)
-    print("Number of queries in test dataset: ",test_set.len())
+    print("Number of samples in test dataset: ",test_set.len())
 
     # Perform data transformations on inputs 
     drop_const = dropConst(train_set)
