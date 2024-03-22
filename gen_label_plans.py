@@ -72,8 +72,9 @@ def gen_label_plans(data_slice, schema_name, encFileID, conn_str_path, input_dir
     # load input queries
     queries, query_ids = load_input_queries(input_dir)
 
-    queries = queries[data_slice]
-    query_ids = query_ids[data_slice]
+    if data_slice is not None:
+        queries = queries[data_slice]
+        query_ids = query_ids[data_slice]
 
     query_success_id=0
     guide_success_id=0
@@ -167,12 +168,12 @@ def gen_label_plans(data_slice, schema_name, encFileID, conn_str_path, input_dir
 if __name__ == '__main__':
 
     gen_label_plans(
-        data_slice= slice(6000,7000), # Specify the max number of queries to explain
+        data_slice= None, # Specify the max number of queries to explain
         schema_name = 'imdb', # schema name
-        encFileID = "job_syn_p13", # a unique id for the dataset
+        encFileID = "job_main", # a unique id for the dataset
         conn_str_path = './conn_str', # path to the file containing a connection string to the database
         input_dir = "./input/", # the directory that contains query.sql file(s)
-        opt_plan_path = './job_synt_plans_p13/', # the path used to store explain outputs and guidelines
+        opt_plan_path = './job_main_plans/', # the path used to store explain outputs and guidelines
         internal_dir = './internal/', # the path to store intermediary files
         labeled_data_dir = './labeled_data',
         sample_size = 2000, # number of samples used per table
