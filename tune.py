@@ -34,7 +34,7 @@ set_seed(seed)
 # Load train,v alidation, and test datasets
 print("loading train")
 train_set = queryPlanPGDataset(
-    split= 'train', files_id = files_id, labeled_data_dir=labeled_data_dir,  force_reload=reload_data, num_samples = num_samples,
+    split= 'train', files_id = files_id, labeled_data_dir=labeled_data_dir,  force_reload=reload_data, num_samples = None,
     val_samples = val_ratio, test_samples = test_ratio, seed = seed
     )
 print("Number of samples in training dataset: ",train_set.len())
