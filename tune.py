@@ -1,3 +1,6 @@
+####################### TUNE ROQ #######################
+
+import os
 import pytorch_lightning as pl
 import ray
 from ray import air, tune
@@ -18,14 +21,19 @@ cpus_per_trial = 5 # determines the number of cpus used by each experiment. when
 gpus_per_trial = 0.25 # determines the number (or ratio) of gpus used by each experiment
 num_samples=500
 num_epochs=64
+patience=10
 
 # queryPlanPGDataset data module parameteres
 files_id = 'job_syn_all'
 labeled_data_dir = './labeled_data/'
+results_dir ='./param_data/'
 seed = 0
 reload_data = False
 val_ratio = .1
 test_ratio = .1
+
+if not os.path.exists(results_dir):
+    os.mkdir(results_dir)
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -136,7 +144,7 @@ def train_model(config,num_epochs,data,cpus):
     
     es = pl.callbacks.EarlyStopping(
         monitor='val_loss',
-        patience=25, 
+        patience=patience, 
         verbose=False
         )
     
@@ -197,3 +205,7 @@ def tune_lcm_gnn_pl(num_samples=1000, num_epochs=400, cpus = 2,gpus_per_trial = 
     return results
 
 results = tune_lcm_gnn_pl(num_samples=num_samples, num_epochs=num_epochs, cpus = cpus_per_trial, gpus_per_trial = gpus_per_trial)
+
+# save param tuning results to disk
+results_df = results.get_dataframe()
+results_df.to_csv('./param_data/{}_{}_param_tun_res.csv'.format(architecture_p,experiment_id))

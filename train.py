@@ -17,26 +17,39 @@ from lcm.neo_bao_model import lcm_pl as neo_bao
 models_path = os.path.join('.','lightning_models')
 
 def train(experiment_id = 'job', architecture_p = 'roq', files_id = 'temp', labeled_data_dir = './labeled_data/',
-         max_epochs = 1000, patience = 100, num_experiments = 5, num_workers = 10, seed = 0, reload_data = False):
+         max_epochs = 1000, patience = 100, num_experiments = 5, num_workers = 10, seed = 0, reload_data = False, val_samples = 0.1,test_samples = 200):
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # sets seed for random, numpy, and torch cuda  
     set_seed(seed)
 
-    roq_config ={
-        'TCNNin': 64,
-        'TCNNout': 32,
-        'batch_size': 512,
-        'dropout': 0.12333583157720673,
-        'finalMLPin': 128,
-        'finalMLPout': 128,
-        'lr': 0.00035,
-        'node_embd_dim': 16,
-        'qp_attheads': 1,
-        'qp_gnn_ls': 3,
-        'query_module_out': 64
-        }
+    roq_config = {
+        'node_embd_dim': 32, 
+        'query_module_out': 128, 
+        'qp_attheads': 1, 
+        'qp_gnn_ls': 2, 
+        'TCNNin': 256, 
+        'TCNNout': 32, 
+        'finalMLPin': 512, 
+        'finalMLPout': 128, 
+        'batch_size': 512, 
+        'dropout': 0.08112051131616642, 
+        'lr': 0.0007}
+    
+    # {
+    #     'TCNNin': 64,
+    #     'TCNNout': 32,
+    #     'batch_size': 512,
+    #     'dropout': 0.12333583157720673,
+    #     'finalMLPin': 128,
+    #     'finalMLPout': 128,
+    #     'lr': 0.00035,
+    #     'node_embd_dim': 16,
+    #     'qp_attheads': 1,
+    #     'qp_gnn_ls': 3,
+    #     'query_module_out': 64
+    #     }
 
     neo_config={
         'TCNNin': 512,
@@ -75,7 +88,7 @@ def train(experiment_id = 'job', architecture_p = 'roq', files_id = 'temp', labe
         split= 'train', files_id = files_id, 
         labeled_data_dir=labeled_data_dir,  
         force_reload=reload_data, 
-        val_samples = 0.05, test_samples = 0.05, 
+        val_samples = val_samples, test_samples = test_samples, 
         seed = seed
         )
     print("Number of samples in training dataset: ",train_set.len())
@@ -240,4 +253,6 @@ if __name__ == '__main__':
         num_workers = 3, 
         seed = 0,
         reload_data = True,
+        val_samples = 0.1,
+        test_samples = 200
         )

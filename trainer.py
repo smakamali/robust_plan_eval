@@ -11,7 +11,7 @@ if __name__ == '__main__':
 
     architectures = [
                     'roq', #'neo_plus','bao_plus',
-                    'neo','bao',
+                    # 'neo','bao',
                      ]
     experiment_id = 'job_syn'
     
@@ -23,8 +23,10 @@ if __name__ == '__main__':
             architecture_p = arch,
             files_id='job_syn_all',
             labeled_data_dir='./labeled_data',
-            max_epochs = 1000, patience = 30, 
-            num_experiments = 5, num_workers = 5, seed = 0
+            max_epochs = 1000, patience = 20, 
+            num_experiments = 5, num_workers = 5,
+            seed = 0, reload_data = False,
+            val_samples = 0.1, test_samples = 200
             )
         
         training_time_dict[arch] = training_time
