@@ -61,10 +61,12 @@ def gen_label_plans(data_slice, schema_name, encFileID, conn_str_path, input_dir
         os.mkdir(labeled_data_dir)
         print("\n" + labeled_data_dir + " Created...\n")
 
-    err_files_path = os.path.join(internal_dir,'error_files_{}'.format(encFileID))
-    with open(err_files_path, 'w') as f:
-        f.write("Explain errors for "+ encFileID+"\n")
-    print("\n" + err_files_path + " Created...\n")
+    output_path = os.path.join(labeled_data_dir,'labeled_query_plans_{}.pickle'.format(encFileID))
+
+    # err_files_path = os.path.join(internal_dir,'error_files_{}'.format(encFileID))
+    # with open(err_files_path, 'w') as f:
+    #     f.write("Explain errors for "+ encFileID+"\n")
+    # print("\n" + err_files_path + " Created...\n")
 
     # establish connection to db
     ibm_db_conn, ibm_db_dbi_conn = connect_to_db(conn_str=conn_str)
@@ -102,10 +104,11 @@ def gen_label_plans(data_slice, schema_name, encFileID, conn_str_path, input_dir
                     
                     # warm up run to dampen the impact of cold buffer pool for the first execution
                     if hintset_id == 0:
-                        _ = query.execute(hintset=histset,
-                        hintset_id=hintset_id, 
-                        ibm_db_conn=ibm_db_conn,timeout_thr=timeout_thr
-                        )
+                        _ = query.execute(
+                            hintset=histset,
+                            hintset_id=hintset_id, 
+                            ibm_db_conn=ibm_db_conn,timeout_thr=timeout_thr
+                            )
                     
                     # if the defaul plan times out, skip the whole query
                     if query.plans[0].latency > timeout_thr:
@@ -140,7 +143,7 @@ def gen_label_plans(data_slice, schema_name, encFileID, conn_str_path, input_dir
         
         # checkpoint - write to disk every 100 query
         if query_success_id%5:
-            with open(os.path.join(labeled_data_dir,'labeled_query_plans_{}.pickle'.format(encFileID)), 'wb') as f:
+            with open(output_path, 'wb') as f:
                 pickle.dump(query_list, f)
 
         # Unsuccessful compiles leads to creating Db2 dump file that eats up space. This code block periodically clears the dump files.
@@ -154,7 +157,7 @@ def gen_label_plans(data_slice, schema_name, encFileID, conn_str_path, input_dir
 
 
     # final write to disk
-    with open(os.path.join(labeled_data_dir,'labeled_query_plans_{}.pickle'.format(encFileID)),'wb') as f:
+    with open(output_path,'wb') as f:
         pickle.dump(query_list, f)
 
     toc = time.time()
