@@ -13,9 +13,12 @@ def patch(file_path, patched_file_path):
     for idx,query in enumerate(queries_list):
         for hint_id in query.plans.keys():
             print("query",query.q_id,"hint",hint_id) 
+            
+            # fix plan tree binarization
             plan = query.plans[hint_id]
             guideline = tabid2tab(plan.guideline, plan.tab_alias_dict)
             query.plans[hint_id].plan_tree = gltemplatetotree(guideline, plan.id_tab)
+
         new_queries_list.append(query)
 
     # write patched file to disk
