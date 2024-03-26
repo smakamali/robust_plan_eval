@@ -11,6 +11,7 @@ torchvision
 torchaudio
 tensorboard
 pytorch-lightning
+torchmetrics
 ipykernel
 
 torch-geometric
