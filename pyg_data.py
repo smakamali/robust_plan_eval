@@ -53,11 +53,6 @@ class queryPlanPGDataset(InMemoryDataset):
             'proc_data_{}_ts.pt'.format(self.files_id),
                ]
 
-#     def download(self):
-#         # Download to `self.raw_dir`.
-#         download_url(url, self.raw_dir)
-#         ...
-
     def process(self):
         # Read data into huge `Data` list.
         with open(self.raw_file_names[0],'rb') as f:
@@ -77,8 +72,8 @@ class queryPlanPGDataset(InMemoryDataset):
             for j in query.plans.keys():
                 plan = query.plans[j]
                 plan_trees.append(plan.plan_tree)
-        # print("ql ------------->",queries_list[0].plans[0].guideline)
-        # print("ql ------------->",queries_list[0].plans[0].plan_tree.print())
+
+        # prepare plan trees for TCNN
         prep_trees=prepare_trees(plan_trees, transformer, left_child, right_child, cuda=False)
         
         # create individual Data objects for each single sample
@@ -93,20 +88,29 @@ class queryPlanPGDataset(InMemoryDataset):
                 clear_output(wait=True)
                 print('Loading the data ... {}%'.format(math.floor((i/fin_samples)*100)))
             for j in query.plans.keys():
-                query_ids.append(query.q_id)
                 plan = query.plans[j]
-                plan_cost = plan.cost if plan.cost !='' else 0
-                plan_latency = plan.latency if plan.latency is not None else 0
-                plan_latency_list.append(plan_latency)
                 
+                # skip the plan if the plan's cost or latency are not populated
+                if plan.latency is None or plan.cost.size == 0:
+                    break
+                
+                # replace the latency for timed out plans with 5*opt_plan_latency 
+                opt_plan = False
+                plan_latency = plan.latency
+                if plan.hintset_id == 0:
+                    opt_plan = True
+                    opt_plan_latency = plan.latency
+                else:
+                    if plan.timed_out == True:
+                        plan_latency = 5*opt_plan_latency
+                    
+                opt_plan_msk.append(opt_plan)
+                plan_latency_list.append(plan_latency)
+
+                # assign plan tree attributes and orders
                 prep_tree_attr = prep_trees[0][prep_tree_id]
                 prep_tree_ord = prep_trees[1][prep_tree_id]
                 prep_tree_id+=1
-                
-                opt_plan = False
-                if plan.hintset_id == 0:
-                    opt_plan = True
-                opt_plan_msk.append(opt_plan)
 
                 data = Data(
                     x_s=torch.Tensor(query.node_attr),
@@ -119,11 +123,12 @@ class queryPlanPGDataset(InMemoryDataset):
                     query_id = query.q_id,
                     num_joins = torch.Tensor([int(query.edge_indc.shape[1]/2)]),
                     opt_choice = torch.Tensor([opt_plan]),
-                    opt_cost = torch.Tensor([float(plan_cost)]),
+                    opt_cost = torch.Tensor([float(plan.cost)]),
                     y_t = torch.Tensor([float(plan_latency)]),  # placeholder for transformed targets
                     num_nodes = torch.Tensor(query.node_attr).shape[0], 
                     # purturbed_runtimes = torch.Tensor(purturbed_runtimes[i]),
                     )
+                query_ids.append(query.q_id)
                 data_list.append(data)
         
         clear_output(wait=True)
@@ -194,4 +199,3 @@ class queryPlanPGDataset(InMemoryDataset):
         ts_data, ts_slices = self.collate(list(compress(data_list, test_slice)))
 
         torch.save((ts_data, ts_slices), self.processed_paths[2])
-
