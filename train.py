@@ -25,60 +25,81 @@ def train(experiment_id = 'job', architecture_p = 'roq', files_id = 'temp', labe
     set_seed(seed)
 
     roq_config = {
-        'node_embd_dim': 32, 
-        'query_module_out': 128, 
-        'qp_attheads': 1, 
-        'qp_gnn_ls': 2, 
-        'TCNNin': 256, 
-        'TCNNout': 32, 
-        'finalMLPin': 512, 
-        'finalMLPout': 128, 
-        'batch_size': 512, 
-        'dropout': 0.08112051131616642, 
-        'lr': 0.0007}
-    
-    # {
-    #     'TCNNin': 64,
-    #     'TCNNout': 32,
-    #     'batch_size': 512,
-    #     'dropout': 0.12333583157720673,
-    #     'finalMLPin': 128,
-    #     'finalMLPout': 128,
-    #     'lr': 0.00035,
-    #     'node_embd_dim': 16,
-    #     'qp_attheads': 1,
-    #     'qp_gnn_ls': 3,
-    #     'query_module_out': 64
-    #     }
+        'node_embd_dim' : 16,
+        'query_module_out':32,
+        'qp_attheads' : 3,
+        'qp_gnn_ls' : 2,
+        'TCNNin': 64, 
+        'TCNNout': 64, 
+        'finalMLPin': 128, 
+        'finalMLPout': 64, 
+        'batch_size': 128, 
+        'dropout': 0.11611657889057585, 
+        'lr': 0.00025,}
+
+        # {'node_embd_dim': 32,
+        # 'query_module_out': 128,
+        # 'qp_attheads': 1,
+        # 'qp_gnn_ls': 2,
+        # 'TCNNin': 64,
+        # 'TCNNout': 32,
+        # 'finalMLPin': 128,
+        # 'finalMLPout': 64,
+        # 'batch_size': 256,
+        # 'dropout': 0.05940694280350186, 
+        # 'lr': 0.0007
+        # }
 
     neo_config={
-        'TCNNin': 512,
-        'TCNNout': 128,
-        'batch_size': 512,
-        'dropout': 0.08178909250467073,
-        'finalMLPin': 128,
-        'finalMLPout': 32,
-        'lr': 0.001,
-        'node_embd_dim': 16,
-        'qp_attheads': 1,
-        'qp_gnn_ls': 3,
-        'query_module_out': 32,
-        'query_module_in': 128
-        }
+        'query_module_in': 128, 
+        'query_module_out': 16, 
+        'TCNNin': 128, 
+        'TCNNout': 64, 
+        'finalMLPin': 256, 
+        'finalMLPout': 128, 
+        'batch_size': 128, 
+        'dropout': 0.18595313410513215, 
+        'lr': 0.00145,
+    }
+
+        #{ 'TCNNin': 512,
+        # 'TCNNout': 128,
+        # 'batch_size': 512,
+        # 'dropout': 0.08178909250467073,
+        # 'finalMLPin': 128,
+        # 'finalMLPout': 32,
+        # 'lr': 0.001,
+        # 'node_embd_dim': 16,
+        # 'qp_attheads': 1,
+        # 'qp_gnn_ls': 3,
+        # 'query_module_out': 32,
+        # 'query_module_in': 128
+        # }
 
     bao_config={
-        'TCNNin': 256,
-        'TCNNout': 64,
-        'batch_size': 512,
-        'dropout': 0.15,
-        'finalMLPin': 64,
-        'finalMLPout': 32,
-        'lr': 0.0005,
-        'node_embd_dim': 16,
-        'qp_attheads': 1,
-        'qp_gnn_ls': 3,
-        'query_module_out': 64
+        'query_module_in': 128, 
+        'query_module_out': 16, 
+        'TCNNin': 128, 
+        'TCNNout': 64, 
+        'finalMLPin': 512, 
+        'finalMLPout': 128, 
+        'batch_size': 128, 
+        'dropout': 0.19116281102967014, 
+        'lr': 0.0025
         }
+    
+        # {'TCNNin': 256,
+        # 'TCNNout': 64,
+        # 'batch_size': 512,
+        # 'dropout': 0.15,
+        # 'finalMLPin': 64,
+        # 'finalMLPout': 32,
+        # 'lr': 0.0005,
+        # 'node_embd_dim': 16,
+        # 'qp_attheads': 1,
+        # 'qp_gnn_ls': 3,
+        # 'query_module_out': 64
+        # }
 
     torch.set_float32_matmul_precision('high')
 
@@ -197,10 +218,13 @@ def train(experiment_id = 'job', architecture_p = 'roq', files_id = 'temp', labe
         num_params = sum([np.prod(p.size()) for p in  model.parameters()])
         num_params = str(int(num_params/1000))
         num_q = str(round(np.unique(np.array(train_set.query_id)).shape[0]/1000))
+        lr = str(config['lr'])[:8]
+        bs = str(config['batch_size'])
+        do = str(config['dropout'])[:5]
         # model_name = 'lcm_full_gnn_v0'
-        model_name = '{}_{}_lr{}_{}kq_{}kp_run{}'.format(
+        model_name = '{}_{}_lr{}_bs{}_do{}_{}kq_{}kp_run{}'.format(
             architecture_p,experiment_id, 
-            str(config['lr'])[:8],num_q,num_params,run_id)
+            lr,bs,do,num_q,num_params,run_id)
 
         es = pl.callbacks.EarlyStopping(monitor='val_loss',patience=patience, verbose=True)
         
