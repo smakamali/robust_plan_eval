@@ -10,8 +10,11 @@ if __name__ == '__main__':
     # freeze_support()
 
     architectures = [
-                    'roq', #'neo_plus','bao_plus',
-                    # 'neo','bao',
+                    # 'neo_plus',
+                    'neo',
+                    # 'bao_plus',
+                    'bao',
+                    'roq', 
                      ]
     experiment_id = 'job_syn'
     
@@ -21,12 +24,13 @@ if __name__ == '__main__':
         training_time = train(
             experiment_id = experiment_id,
             architecture_p = arch,
-            files_id='job_syn_all',
+            files_id='job_syn_all_pluslongrun',
             labeled_data_dir='./labeled_data',
-            max_epochs = 1000, patience = 20, 
+            max_epochs = 1000, patience = 10, 
             num_experiments = 5, num_workers = 5,
             seed = 0, reload_data = False,
-            val_samples = 0.1, test_samples = 200
+            val_samples = 500, test_samples = 500,
+            test_longrun_share = None
             )
         
         training_time_dict[arch] = training_time

@@ -4,10 +4,11 @@
 import os
 import time
 import pickle
+import json
 import torch
 import numpy as np
 from pyg_data import queryPlanPGDataset
-from util.util import set_seed
+from util.util import set_seed, load_model_params
 from util.data_transform import *
 from util.custom_loss import aleatoric_loss, rmse_loss
 import pytorch_lightning as pl
@@ -16,90 +17,22 @@ from lcm.neo_bao_model import lcm_pl as neo_bao
 
 models_path = os.path.join('.','lightning_models')
 
-def train(experiment_id = 'job', architecture_p = 'roq', files_id = 'temp', labeled_data_dir = './labeled_data/',
-         max_epochs = 1000, patience = 100, num_experiments = 5, num_workers = 10, seed = 0, reload_data = False, val_samples = 0.1,test_samples = 200):
+def train(
+    experiment_id = 'job', architecture_p = 'roq', 
+    files_id = 'temp', labeled_data_dir = './labeled_data/',
+    max_epochs = 1000, patience = 100, num_experiments = 5, 
+    num_workers = 10, seed = 0, reload_data = False, 
+    val_samples = 0.1,test_samples = 200,test_longrun_share=None):
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # sets seed for random, numpy, and torch cuda  
     set_seed(seed)
 
-    roq_config = {
-        'node_embd_dim' : 16,
-        'query_module_out':32,
-        'qp_attheads' : 3,
-        'qp_gnn_ls' : 2,
-        'TCNNin': 64, 
-        'TCNNout': 64, 
-        'finalMLPin': 128, 
-        'finalMLPout': 64, 
-        'batch_size': 128, 
-        'dropout': 0.11611657889057585, 
-        'lr': 0.00025,}
-
-        # {'node_embd_dim': 32,
-        # 'query_module_out': 128,
-        # 'qp_attheads': 1,
-        # 'qp_gnn_ls': 2,
-        # 'TCNNin': 64,
-        # 'TCNNout': 32,
-        # 'finalMLPin': 128,
-        # 'finalMLPout': 64,
-        # 'batch_size': 256,
-        # 'dropout': 0.05940694280350186, 
-        # 'lr': 0.0007
-        # }
-
-    neo_config={
-        'query_module_in': 128, 
-        'query_module_out': 16, 
-        'TCNNin': 128, 
-        'TCNNout': 64, 
-        'finalMLPin': 256, 
-        'finalMLPout': 128, 
-        'batch_size': 128, 
-        'dropout': 0.18595313410513215, 
-        'lr': 0.00145,
-    }
-
-        #{ 'TCNNin': 512,
-        # 'TCNNout': 128,
-        # 'batch_size': 512,
-        # 'dropout': 0.08178909250467073,
-        # 'finalMLPin': 128,
-        # 'finalMLPout': 32,
-        # 'lr': 0.001,
-        # 'node_embd_dim': 16,
-        # 'qp_attheads': 1,
-        # 'qp_gnn_ls': 3,
-        # 'query_module_out': 32,
-        # 'query_module_in': 128
-        # }
-
-    bao_config={
-        'query_module_in': 128, 
-        'query_module_out': 16, 
-        'TCNNin': 128, 
-        'TCNNout': 64, 
-        'finalMLPin': 512, 
-        'finalMLPout': 128, 
-        'batch_size': 128, 
-        'dropout': 0.19116281102967014, 
-        'lr': 0.0025
-        }
-    
-        # {'TCNNin': 256,
-        # 'TCNNout': 64,
-        # 'batch_size': 512,
-        # 'dropout': 0.15,
-        # 'finalMLPin': 64,
-        # 'finalMLPout': 32,
-        # 'lr': 0.0005,
-        # 'node_embd_dim': 16,
-        # 'qp_attheads': 1,
-        # 'qp_gnn_ls': 3,
-        # 'query_module_out': 64
-        # }
+    # load model hyper-parameters
+    roq_config = load_model_params('roq')
+    neo_config = load_model_params('neo')
+    bao_config = load_model_params('bao')
 
     torch.set_float32_matmul_precision('high')
 
@@ -109,7 +42,7 @@ def train(experiment_id = 'job', architecture_p = 'roq', files_id = 'temp', labe
         split= 'train', files_id = files_id, 
         labeled_data_dir=labeled_data_dir,  
         force_reload=reload_data, 
-        val_samples = val_samples, test_samples = test_samples, 
+        val_samples = val_samples, test_samples = test_samples, test_longrun_share=test_longrun_share,
         seed = seed
         )
     print("Number of samples in training dataset: ",train_set.len())
@@ -164,12 +97,16 @@ def train(experiment_id = 'job', architecture_p = 'roq', files_id = 'temp', labe
 
     follow_batch = ['x_s']
 
-    train_loader = DataLoader(train_set, batch_size=batch_size,
-                                persistent_workers=True,
-                            shuffle=False, num_workers=num_workers, follow_batch=follow_batch)
-    val_loader = DataLoader(val_set, batch_size=batch_size,
-                            persistent_workers=True,
-                            shuffle=False, num_workers=num_workers, follow_batch=follow_batch)
+    train_loader = DataLoader(
+        train_set, batch_size=batch_size,
+        persistent_workers=True,
+        shuffle=False, num_workers=num_workers, follow_batch=follow_batch
+        )
+    val_loader = DataLoader(
+        val_set, batch_size=batch_size,
+        persistent_workers=True,
+        shuffle=False, num_workers=num_workers, follow_batch=follow_batch
+        )
 
     if 'roq' in architecture_p:
         loss = aleatoric_loss(device=device)
@@ -192,27 +129,31 @@ def train(experiment_id = 'job', architecture_p = 'roq', files_id = 'temp', labe
                 config = neo_config
             else:
                 config = bao_config
-            model = neo_bao(num_node = node_attr_shape[0], 
-                        node_dim = node_attr_shape[1],
-                        edge_dim = edge_attr_shape[1],#fill_value =0, 
-                        numPlanFeat=plan_attr_shape,
-                        numPlanOrdFeat=plan_ord_shape,
-                        numQueryGraphFeat = graph_attr_shape[0],
-                        device = device, 
-                        criterion = loss,
-                        architecture = architecture_p,
-                        **config)
+            model = neo_bao(
+                num_node = node_attr_shape[0], 
+                node_dim = node_attr_shape[1],
+                edge_dim = edge_attr_shape[1],#fill_value =0, 
+                numPlanFeat=plan_attr_shape,
+                numPlanOrdFeat=plan_ord_shape,
+                numQueryGraphFeat = graph_attr_shape[0],
+                device = device, 
+                criterion = loss,
+                architecture = architecture_p,
+                **config
+                )
         elif 'roq' in architecture_p:
             config = roq_config
-            model = roq(num_node = node_attr_shape[0], 
-                        node_dim = node_attr_shape[1],
-                        edge_dim = edge_attr_shape[1],#fill_value =0, 
-                        numPlanFeat=plan_attr_shape,
-                        numPlanOrdFeat=plan_ord_shape,
-                        numQueryGraphFeat = graph_attr_shape[0],
-                        with_var = True, device = device, 
-                        criterion = loss,
-                        **config)
+            model = roq(
+                num_node = node_attr_shape[0], 
+                node_dim = node_attr_shape[1],
+                edge_dim = edge_attr_shape[1],#fill_value =0, 
+                numPlanFeat=plan_attr_shape,
+                numPlanOrdFeat=plan_ord_shape,
+                numQueryGraphFeat = graph_attr_shape[0],
+                with_var = True, device = device, 
+                criterion = loss,
+                **config
+                )
 
         # model_parameters = filter(lambda p: p.requires_grad, model.parameters())
         num_params = sum([np.prod(p.size()) for p in  model.parameters()])

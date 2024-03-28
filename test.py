@@ -1,15 +1,15 @@
 ####################### TEST ROQ #######################
 
 # TODO: read model configs from disk
-# TODO: remove target transformation if it is not needed
 
 import os
 import pickle
+import json
 import torch
 import numpy as np
 import pandas as pd
 from pyg_data import queryPlanPGDataset
-from util.util import set_seed
+from util.util import set_seed, load_model_params, load_best_model_paths
 from util.data_transform import *
 from util.custom_loss import aleatoric_loss, rmse_loss
 import pytorch_lightning as pl
@@ -20,55 +20,10 @@ from util.torch_util import LitMCdropoutModel
 from util.eval_util import *
 
 
-num_workers = 10
-
-models_path = os.path.join('.','lightning_models')
 results_dir = os.path.join('.','results')
-
-roq_config ={'TCNNin': 64,
- 'TCNNout': 32,
- 'batch_size': 512,
- 'dropout': 0.12333583157720673,
- 'finalMLPin': 128,
- 'finalMLPout': 128,
- 'lr': 0.00035,
- 'node_embd_dim': 16,
- 'qp_attheads': 1,
- 'qp_gnn_ls': 3,
- 'query_module_out': 64}
-
-neo_config={'TCNNin': 512,
- 'TCNNout': 128,
- 'batch_size': 512,
- 'dropout': 0.08178909250467073,
- 'finalMLPin': 128,
- 'finalMLPout': 32,
- 'lr': 0.001,
- 'node_embd_dim': 16,
- 'qp_attheads': 1,
- 'qp_gnn_ls': 3,
- 'query_module_out': 32,
- 'query_module_in': 128}
-
-bao_config={'TCNNin': 256,
- 'TCNNout': 64,
- 'batch_size': 512,
- 'dropout': 0.15,
- 'finalMLPin': 64,
- 'finalMLPout': 32,
- 'lr': 0.0005,
- 'node_embd_dim': 16,
- 'qp_attheads': 1,
- 'qp_gnn_ls': 3,
- 'query_module_out': 64}
-
-def load_best_model_paths(architecture_p,experiment_id):
-    with open(
-        os.path.join(models_path,'best_model_paths_{}_{}.pkl'.format(architecture_p,experiment_id)), 'rb') as file:
-        return pickle.load(file)
-    
-def test(experiment_id = 'job',architecture_p = 'roq',
-         files_id = 'temp', try_gpu_inf=True, seed = 0, num_workers=num_workers, show_fig = False):
+   
+def test(experiment_id = 'job',
+         files_id = 'temp', try_gpu_inf=True, seed = 0, num_workers=5, show_fig = False):
 
     set_seed(seed)
 
@@ -86,6 +41,11 @@ def test(experiment_id = 'job',architecture_p = 'roq',
     if not os.path.exists(results_dir):
         os.mkdir(results_dir)
 
+    # loading model hyper-parameters
+    roq_config = load_model_params('roq')
+    neo_config = load_model_params('neo')
+    bao_config = load_model_params('bao')
+
     # loading model paths
     best_model_paths = load_best_model_paths('roq',experiment_id)
     neo_paths =  load_best_model_paths('neo',experiment_id)
@@ -97,19 +57,19 @@ def test(experiment_id = 'job',architecture_p = 'roq',
         split= 'train', files_id = files_id,
         force_reload=False, seed = seed 
         )
-    print("Number of queries in training dataset: ",train_set.len())
+    print("{} queries and {} samples in training dataset: ".format(np.unique(np.array(train_set.query_id)).shape[0],train_set.len()))
     
     print("loading val")
     val_set = queryPlanPGDataset(
         split= 'val', files_id = files_id
         )
-    print("Number of queries in vlidation dataset: ",val_set.len())
+    print("{} queries and {} samples in vlidation dataset: ".format(np.unique(np.array(val_set.query_id)).shape[0],val_set.len()))
     
     print("loading test")
     test_set = queryPlanPGDataset(
         split= 'test', files_id = files_id
         )
-    print("Number of queries in test dataset: ",test_set.len())
+    print("{} queries and {} samples in test dataset: ".format(np.unique(np.array(test_set.query_id)).shape[0],test_set.len()))
 
     # Perform data transformations on inputs 
     drop_const = dropConst(train_set)
@@ -269,12 +229,12 @@ def test(experiment_id = 'job',architecture_p = 'roq',
 
         val_loader = DataLoader(
             val_set, batch_size=batch_size,
-            shuffle=False, num_workers=0, follow_batch=follow_batch,
+            shuffle=False, num_workers=num_workers, follow_batch=follow_batch,
             #  persistent_workers=True
             )
         test_loader = DataLoader(
             test_set, batch_size=batch_size,
-            shuffle=False, num_workers=0, follow_batch=follow_batch,
+            shuffle=False, num_workers=num_workers, follow_batch=follow_batch,
             #  persistent_workers=True
             )
         
@@ -310,8 +270,8 @@ def test(experiment_id = 'job',architecture_p = 'roq',
             val_set,
             strategy='conservative',
             minimize = 'runtime',
-            p1_grid = np.arange(0,.5,0.1),
-            p2_grid = np.arange(0,.5,0.1),
+            p1_grid = np.arange(0,.5,0.025),
+            p2_grid = np.arange(0,.5,0.025),
             strategy_args=cons_total_ratio_RN
             )
 
@@ -330,8 +290,8 @@ def test(experiment_id = 'job',architecture_p = 'roq',
             val_set,
             strategy='conservative',
             minimize = 'subopt',
-            p1_grid = np.arange(0,.5,0.1),
-            p2_grid = np.arange(0,.5,0.1),
+            p1_grid = np.arange(0,.5,0.025),
+            p2_grid = np.arange(0,.5,0.025),
             strategy_args=cons_total_ratio_SO
             )
 
@@ -350,7 +310,7 @@ def test(experiment_id = 'job',architecture_p = 'roq',
             val_set,
             strategy='conservative',
             minimize = 'runtime',
-            p1_grid = np.arange(0,.5,0.1),
+            p1_grid = np.arange(0,.5,0.025),
             strategy_args=cons_data_ratio_RN
             )
 
@@ -369,7 +329,7 @@ def test(experiment_id = 'job',architecture_p = 'roq',
             val_set,
             strategy='conservative',
             minimize = 'subopt',
-            p1_grid = np.arange(0,.5,0.1),
+            p1_grid = np.arange(0,.5,0.025),
             strategy_args=cons_data_ratio_SO
             )
 
@@ -387,7 +347,7 @@ def test(experiment_id = 'job',architecture_p = 'roq',
             val_set,
             strategy='conservative',
             minimize = 'runtime',
-            p2_grid = np.arange(0,.5,0.1),
+            p2_grid = np.arange(0,.5,0.025),
             strategy_args=cons_model_ratio_RN)
 
         cons_model_ratio_SO = find_optimal_cons_ratio(
@@ -404,7 +364,7 @@ def test(experiment_id = 'job',architecture_p = 'roq',
             val_set,
             strategy='conservative',
             minimize = 'subopt',
-            p2_grid = np.arange(0,.5,0.1),
+            p2_grid = np.arange(0,.5,0.025),
             strategy_args=cons_model_ratio_SO
             )
 
@@ -415,8 +375,8 @@ def test(experiment_id = 'job',architecture_p = 'roq',
             val_set,
             strategy='subopt risk',
             minimize = 'runtime',
-            p1_grid = np.arange(0,.5,0.1),
-            p2_grid = np.arange(0,.5,0.1))
+            p1_grid = np.arange(0,.5,0.025),
+            p2_grid = np.arange(0,.5,0.025))
 
         risk_total_prune_ratio_SO = find_optimal_prune_ratio(
             'data_prune_ratio',
@@ -424,8 +384,8 @@ def test(experiment_id = 'job',architecture_p = 'roq',
             val_set,
             strategy='subopt risk',
             minimize = 'subopt',
-            p1_grid = np.arange(0,.5,0.1),
-            p2_grid = np.arange(0,.5,0.1)
+            p1_grid = np.arange(0,.5,0.025),
+            p2_grid = np.arange(0,.5,0.025)
             )
 
         risk_data_prune_ratio_RN = find_optimal_prune_ratio(
@@ -434,7 +394,7 @@ def test(experiment_id = 'job',architecture_p = 'roq',
             val_set,
             strategy='subopt risk',
             minimize = 'runtime',
-            p1_grid = np.arange(0,.5,0.1))
+            p1_grid = np.arange(0,.5,0.025))
 
         risk_data_prune_ratio_SO = find_optimal_prune_ratio(
             'data_prune_ratio',
@@ -442,7 +402,7 @@ def test(experiment_id = 'job',architecture_p = 'roq',
             val_set,
             strategy='subopt risk',
             minimize = 'subopt',
-            p1_grid = np.arange(0,.5,0.1))
+            p1_grid = np.arange(0,.5,0.025))
 
         risk_model_prune_ratio_RN = find_optimal_prune_ratio(
             'data_prune_ratio',
@@ -450,7 +410,7 @@ def test(experiment_id = 'job',architecture_p = 'roq',
             val_set,
             strategy='subopt risk',
             minimize = 'runtime',
-            p2_grid = np.arange(0,.5,0.1)
+            p2_grid = np.arange(0,.5,0.025)
             )
 
         risk_model_prune_ratio_SO = find_optimal_prune_ratio(
@@ -459,7 +419,7 @@ def test(experiment_id = 'job',architecture_p = 'roq',
             val_set,
             strategy='subopt risk',
             minimize = 'subopt',
-            p2_grid = np.arange(0,.5,0.1)
+            p2_grid = np.arange(0,.5,0.025)
             )
 
         # Threshold for the Optimizer
@@ -469,7 +429,7 @@ def test(experiment_id = 'job',architecture_p = 'roq',
             val_set,
             strategy='baseline opt',
             minimize = 'runtime',
-            p1_grid = np.arange(0,.5,0.05)
+            p1_grid = np.arange(0,.5,0.025)
             )
         
             
@@ -787,9 +747,9 @@ if __name__ == '__main__':
 
     test(
         experiment_id = 'job_syn',
-        files_id = 'job_syn_all',
+        files_id = 'job_syn_all_pluslongrun',
         try_gpu_inf=True,
         seed = 0, 
-        num_workers=num_workers,
+        num_workers=10,
         show_fig = False
         )
