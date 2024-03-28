@@ -229,8 +229,6 @@ class lcm_pl(pl.LightningModule):
             metrics_dict, batch_size = self.batch_size,
             on_step=False, on_epoch=True
             )
-        # self.log("train_loss", loss, prog_bar=True, batch_size = self.batch_size, 
-                #  on_step=False, on_epoch=True)        
         return loss
     
     def validation_step(self, batch, batch_idx):
@@ -239,13 +237,11 @@ class lcm_pl(pl.LightningModule):
         loss = self.criterion(y_pred, labels)
         corr = self.spearmans_corr(y_pred[:,0], labels)
         qerr = self.qerror(y_pred[:,0], labels)
-        # self.validation_step_outputs.append(loss)
         metrics_dict = {'val_loss':loss, 'val_corr':corr, 'val_q-error':qerr}
         self.log_dict(
             metrics_dict, batch_size = self.batch_size,
             on_step=False, on_epoch=True
             )
-        # self.log("val_loss", loss, prog_bar=True, batch_size = self.batch_size)
         return metrics_dict
     
     def configure_optimizers(self):
@@ -254,8 +250,3 @@ class lcm_pl(pl.LightningModule):
     
     def predict_step(self, batch, batch_idx, dataloader_idx=0):
         return self(batch)
-    
-    # def on_validation_epoch_end(self):
-    #     avg_loss = torch.stack(self.validation_step_outputs).mean()
-    #     self.log("ptl/val_loss", avg_loss)
-    #     self.validation_step_outputs.clear()

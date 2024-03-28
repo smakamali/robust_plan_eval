@@ -11,6 +11,8 @@ import torch
 from torch import nn
 from torch_geometric.utils import to_dense_batch,to_dense_adj
 from util.custom_loss import aleatoric_loss
+from torchmetrics.regression import SpearmanCorrCoef
+from util.custom_loss import qErrorLossClass
 
 def produce_mlp(inputNumFeat,firstLayerSize,LastLayerSize,dropout,activation=nn.ReLU(), return_module=True):
     mlp_layers = []
@@ -70,6 +72,8 @@ class lcm_pl(pl.LightningModule):
         self.node_embd_dim_for_plan = node_embd_dim # used to compress node embeddings before appending to plan nodes - using node_embd_dim for now
         self.query_module_out = query_module_out # for now
         self.lr = lr
+        self.spearmans_corr = SpearmanCorrCoef()
+        self.qerror = qErrorLossClass()
         
         # set parameters based on `architecture`
         if 'neo' in self.architecture:
@@ -210,17 +214,27 @@ class lcm_pl(pl.LightningModule):
         y_pred = self(batch)
         labels = batch.y_t.reshape(-1,1)
         loss = self.criterion(y_pred, labels)
-        self.log("train_loss", loss, prog_bar=True, batch_size = self.batch_size, 
-                 on_step=False, on_epoch=True)        
+        corr = self.spearmans_corr(y_pred[:,0], labels)
+        qerr = self.qerror(y_pred[:,0], labels)
+        metrics_dict = {'train_loss':loss, 'train_corr':corr, 'train_q-error':qerr}
+        self.log_dict(
+            metrics_dict, batch_size = self.batch_size,
+            on_step=False, on_epoch=True
+            )
         return loss
     
     def validation_step(self, batch, batch_idx):
         y_pred = self(batch)
         labels = batch.y_t.reshape(-1,1)
         loss = self.criterion(y_pred, labels)
-        self.validation_step_outputs.append(loss)
-        self.log("val_loss", loss, prog_bar=True, batch_size = self.batch_size)
-        return {"val_loss": loss}
+        corr = self.spearmans_corr(y_pred[:,0], labels)
+        qerr = self.qerror(y_pred[:,0], labels)
+        metrics_dict = {'val_loss':loss, 'val_corr':corr, 'val_q-error':qerr}
+        self.log_dict(
+            metrics_dict, batch_size = self.batch_size,
+            on_step=False, on_epoch=True
+            )
+        return metrics_dict
     
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(),lr=self.lr)
@@ -228,8 +242,3 @@ class lcm_pl(pl.LightningModule):
     
     def predict_step(self, batch, batch_idx, dataloader_idx=0):
         return self(batch)
-    
-    def on_validation_epoch_end(self):
-        avg_loss = torch.stack(self.validation_step_outputs).mean()
-        self.log("ptl/val_loss", avg_loss)
-        self.validation_step_outputs.clear()
