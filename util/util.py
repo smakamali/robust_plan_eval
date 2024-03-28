@@ -1,5 +1,7 @@
 import os
 import re
+import json
+import pickle
 import random
 import numpy as np
 import pandas as pd
@@ -8,6 +10,21 @@ from sklearn.preprocessing import OrdinalEncoder
 from sklearn.preprocessing import KBinsDiscretizer
 from scipy.stats import chi2_contingency
 from sklearn.impute import SimpleImputer
+
+models_path = os.path.join('.','lightning_models')
+config_dir = os.path.join('.','config')
+
+def load_best_model_paths(architecture_p,experiment_id,models_path=models_path):
+    with open(
+        os.path.join(models_path,'best_model_paths_{}_{}.pkl'.format(architecture_p,experiment_id)), 'rb') as f:
+        return pickle.load(f)
+
+def load_model_params(arch,config_dir=config_dir):
+    with open(
+        os.path.join(config_dir,'model_params.cfg'), 'r') as f:
+        model_params = json.load(f)
+    
+    return model_params[arch]
 
 def set_seed(seed=0):
     random.seed(seed)

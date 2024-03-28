@@ -8,6 +8,35 @@ from scipy.stats import spearmanr
 from scipy.stats import pearsonr
 from IPython.display import display
 
+def plot2dhist(x,y, xl='', yl='', scale='linear'):
+    x = x.reshape(-1)
+    y = y.reshape(-1)
+    # Creating bins
+    x_min = np.min(x)
+    x_max = np.max(x)
+    
+    y_min = np.min(y)
+    y_max = np.max(y)
+    
+    x_bins = np.linspace(x_min, x_max, 100)
+    y_bins = np.linspace(y_min, y_max, 100)
+    
+    fig, ax = plt.subplots(figsize =(10, 7))
+    # Creating plot
+    plt.hist2d(x, y, bins =[x_bins, y_bins], cmap = plt.cm.nipy_spectral)
+    plt.title(xl+" vs. "+yl)
+    plt.xscale(scale)
+    plt.yscale(scale)
+    # Adding color bar
+    plt.colorbar()
+    
+    ax.set_xlabel(xl) 
+    ax.set_ylabel(yl) 
+    
+    # show plot
+    plt.tight_layout() 
+    plt.show()    
+
 def describe_plot(arrays,titles,metric_label,plot_title,log_scale = True,figsize=[10,6],plot_x_every=5,save_to=None,bbox_to_anchor=None,show_fig=True):
     arrays = np.array(arrays).T
     data = pd.DataFrame(arrays,columns=titles)
@@ -349,13 +378,16 @@ def evaluate_method(pred, uncertainty, data_obj, strategy,
     else:
         return subopts,strategy_runtimes,best_runtimes
 
+import os
+
+results_dir = os.path.join('.','results')
 
 def lcm_model_eval(test_set= None, ypreds_tens_test_org= None, 
                dataset_label = None, model_label = None,
-              percentiles = np.arange(0,1,0.1),load_from_disk=False, files_id = None,show_fig=True):
+              percentiles = np.arange(0,1,0.1),load_from_disk=False, files_id = None,show_fig=True, results_dir=results_dir):
     import torch
     if load_from_disk:
-        q_error_tensor,q_error_alt_tensor,num_joins_qe_tensor,ml_subOptTensor, db2_subOptTensor, num_joins_so_tensor = torch.load('./results/{}_{}_{}.pt'.format(model_label,dataset_label,files_id))
+        q_error_tensor,q_error_alt_tensor,num_joins_qe_tensor,ml_subOptTensor, db2_subOptTensor, num_joins_so_tensor = torch.load(os.path.join(results_dir, 'eval_res_{}_{}_{}.pt'.format(model_label,dataset_label,files_id)))
     else:
         from util.torch_scorers import subOpt2, q_error, q_error_alt
         ml_subOptList=[]
@@ -389,7 +421,8 @@ def lcm_model_eval(test_set= None, ypreds_tens_test_org= None,
         q_error_alt_tensor = torch.cat(q_error_alt_list)
         num_joins_qe_tensor = torch.cat(num_joins_qe_list)
         torch.save((q_error_tensor,q_error_alt_tensor,num_joins_qe_tensor,ml_subOptTensor, db2_subOptTensor, num_joins_so_tensor),
-                   './results/{}_{}_{}.pt'.format(model_label,dataset_label,files_id))
+                   os.path.join(results_dir, 'eval_res_{}_{}_{}.pt'.format(model_label,dataset_label,files_id))
+                   )
     
     # put results in dataframes
     q_error_num_joins = pd.DataFrame((q_error_tensor.numpy(), q_error_alt_tensor.numpy(),num_joins_qe_tensor.numpy())).T
@@ -411,7 +444,9 @@ def lcm_model_eval(test_set= None, ypreds_tens_test_org= None,
     q_error_sum = q_error_num_joins[['q_error']].describe(percentiles)
     q_error_sum = pd.concat([q_error_join_sum, q_error_sum], axis=1)
     q_error_sum = q_error_sum.rename(columns={'q_error':'overall q_error'})
-    q_error_sum.to_csv('./results/q_error_sum_{}_{}_{}.csv'.format(model_label,dataset_label,files_id))
+    q_error_sum.to_csv(
+        os.path.join(results_dir, 'q_error_sum_{}_{}_{}.csv'.format(model_label,dataset_label,files_id))
+        )
     display(q_error_sum)
     # subopt
     subopt_join_sum = subopt_num_joins[['ml_subopt','num_joins']].groupby('num_joins').describe(percentiles=percentiles).T
@@ -429,7 +464,9 @@ def lcm_model_eval(test_set= None, ypreds_tens_test_org= None,
     subopt_sum = pd.concat(dfs.values(), axis=1, keys=dfs.keys())
     # subopt_sum = subopt_sum.rename(columns={'ml_subopt':'overall subopt'})
     # display(subopt_sum)
-    subopt_sum.to_csv('./results/subopt_sum_{}_{}_{}.csv'.format(model_label,dataset_label,files_id))
+    subopt_sum.to_csv(
+        os.path.join(results_dir, 'subopt_sum_{}_{}_{}.pt'.format(model_label,dataset_label,files_id))
+        )
     plot_dist_line(subopt_sum,'subopt','subopt for '+dataset_label+' using '+model_label,show_fig=show_fig)
     display(subopt_sum)
 
