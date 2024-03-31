@@ -112,19 +112,22 @@ def gen_label_plans(data_slice, schema_name, encFileID, conn_str_path, input_dir
                             )
                     
                     # if the defaul plan times out, skip the whole query
-                    if query.plans[0].latency > timeout_thr:
+                    opt_latency = query.plans[0].latency
+                    if opt_latency > timeout_thr:
                         print("Default plan timed out. Skipping query {}...".format(q_id))
                         break
                     
                     # update the timeout threshold if `dynamic_timeout == True`
                     if dynamic_timeout:
-                        timeout_thr = math.ceil(max(timeout_thr,query.plans[0].latency*dynamic_timeout_factor))
+                        new_timeout_thr = math.ceil(max(timeout_thr,opt_latency*dynamic_timeout_factor))
+                    else:
+                        new_timeout_thr = timeout_thr
                     
                     # execute non-defaul plans
                     if hintset_id > 0:
                         errorMsg = query.execute(hintset=histset,
                             hintset_id=hintset_id, 
-                            ibm_db_conn=ibm_db_conn,timeout_thr=timeout_thr,
+                            ibm_db_conn=ibm_db_conn,timeout_thr=new_timeout_thr,
                             exec_verbose = True
                             )
                     
@@ -173,12 +176,12 @@ def gen_label_plans(data_slice, schema_name, encFileID, conn_str_path, input_dir
 if __name__ == '__main__':
 
     gen_label_plans(
-        data_slice= slice(0,500), # Specify the max number of queries to explain
+        data_slice= slice(155,500), # Specify the max number of queries to explain
         schema_name = 'imdb', # schema name
-        encFileID = "job_multipred", # a unique id for the dataset
+        encFileID = "job_multipred_p2", # a unique id for the dataset
         conn_str_path = './conn_str', # path to the file containing a connection string to the database
         input_dir = "./input/input/", # the directory that contains query.sql file(s)
-        opt_plan_path = './job_multipred_plans/', # the path used to store explain outputs and guidelines
+        opt_plan_path = './job_multipred_p2_plans/', # the path used to store explain outputs and guidelines
         internal_dir = './internal/', # the path to store intermediary files
         labeled_data_dir = './labeled_data/',
         sample_size = 2000, # number of samples used per table
