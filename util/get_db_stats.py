@@ -4,7 +4,11 @@ from util.db_util import *
 from util.util import *
 from util.extract_join_attraction import get_all_join_attr
 
-def get_db_stats(schema_name, input_dir='./input', internal_dir='./internal', SAMPLE_SIZE=2000, encFileID='id'):
+def get_db_stats(
+        schema_name, 
+        queries_ids,
+        internal_dir='./internal', SAMPLE_SIZE=2000, encFileID='id'
+        ):
 
     with open("conn_str", "r") as conn_str_f:
         conn_str = conn_str_f.read()
@@ -12,7 +16,10 @@ def get_db_stats(schema_name, input_dir='./input', internal_dir='./internal', SA
     tables = list(table_dict.keys())
 
     # generate and extract join attractions
-    get_all_join_attr(schema_name, encFileID ,input_dir = input_dir)
+    get_all_join_attr(
+        schema_name, encFileID ,
+        queries_ids,
+        )
     JoinAttractions = pd.read_csv(os.path.join(internal_dir,'JoinAttractions_{}.csv'.format(encFileID)),header=0)
 
     samples_dir = './sample_data_{}_{}/'.format(schema_name.lower(),str(SAMPLE_SIZE))
