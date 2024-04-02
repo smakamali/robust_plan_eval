@@ -11,7 +11,7 @@ import pickle
 import math
 import time
 from subprocess import Popen, PIPE
-from util.util import load_input_queries
+from util.util import load_input_queries, load_queries_from_folder
 from util.base_classes import Query
 from util.db_util import connect_to_db,close_connection_to_db
 
@@ -32,7 +32,7 @@ hintsets=[
     ['db2 .opt set disable mgjn;\n', 'db2 .opt set disable hsjn;\n','db2 .opt set disable iscan;\n'],
     ]
 
-def gen_label_plans(data_slice, schema_name, encFileID, conn_str_path, input_dir='./input/', opt_plan_path='./optimizer_plans/', internal_dir='./internal/',labeled_data_dir='./labeled_data', sample_size=2000,timeout_thr=60, dynamic_timeout=False, dynamic_timeout_factor=5):
+def gen_label_plans(start, num_samples, data_slice, schema_name, encFileID, conn_str_path, input_dir='./input/', opt_plan_path='./optimizer_plans/', internal_dir='./internal/',labeled_data_dir='./labeled_data', sample_size=2000,timeout_thr=60, dynamic_timeout=False, dynamic_timeout_factor=5):
 
     tic = time.time()
 
@@ -72,11 +72,39 @@ def gen_label_plans(data_slice, schema_name, encFileID, conn_str_path, input_dir
     ibm_db_conn, ibm_db_dbi_conn = connect_to_db(conn_str=conn_str)
 
     # load input queries
-    queries, query_ids = load_input_queries(input_dir)
+    queries, query_ids = load_queries_from_folder(input_dir)
 
-    if data_slice is not None:
-        queries = queries[data_slice]
-        query_ids = query_ids[data_slice]
+    # get a slice of the input queries if `start` and `num_samples` are given or if `data_slice` is given
+    if data_slice is None:
+        if start is not None and num_samples is not None:
+            max_samples = len(queries)
+            step = int(max_samples/num_samples)
+            data_slice = slice(start,max_samples,step)
+        else:
+            data_slice = slice(0,len(queries))
+
+    queries = queries[data_slice]
+    query_ids = query_ids[data_slice]
+
+    # collect db stats before proceeding to processing queries
+    join_inc_path = os.path.join(internal_dir,'joinIncs_{}.json'.format(str(encFileID)))
+    join_type_path = os.path.join(internal_dir,'joinTypes_{}.json'.format(str(encFileID)))
+    join_factor_path = os.path.join(internal_dir,'joinFactors_{}.json'.format(str(encFileID)))
+    chai2_matrix_path = os.path.join(internal_dir,'chai2matrixDict_{}.pickle'.format(str(encFileID)))
+
+    with open(conn_str_path, "r") as conn_str_f:
+        conn_str = conn_str_f.read()
+
+    # db stats are only collected if they do not exist 
+    if not (os.path.isfile(join_inc_path) and os.path.isfile(join_type_path) and os.path.isfile(join_factor_path) and os.path.isfile(chai2_matrix_path)):
+
+        from util.get_db_stats import get_db_stats
+        get_db_stats(
+            schema_name=schema_name, 
+            queries_ids=(queries, query_ids),
+            # input_dir=input_dir, 
+            internal_dir=internal_dir, SAMPLE_SIZE=sample_size, encFileID=encFileID
+            )
 
     query_success_id=0
     guide_success_id=0
@@ -176,12 +204,14 @@ def gen_label_plans(data_slice, schema_name, encFileID, conn_str_path, input_dir
 if __name__ == '__main__':
 
     gen_label_plans(
-        data_slice= slice(155,500), # Specify the max number of queries to explain
+        data_slice= None, # Specify the max number of queries to process
+        start = 0, # alternative to data_slice, gives the starting index, must be provided together with `num_samples`
+        num_samples = 500, # alternative to data_slice, gives the number of samples, must be provided together with `start`
         schema_name = 'imdb', # schema name
-        encFileID = "job_multipred_p2", # a unique id for the dataset
+        encFileID = "ceb-13k-500-0", # a unique id for the dataset
         conn_str_path = './conn_str', # path to the file containing a connection string to the database
-        input_dir = "./input/input/", # the directory that contains query.sql file(s)
-        opt_plan_path = './job_multipred_p2_plans/', # the path used to store explain outputs and guidelines
+        input_dir = "./input/ceb-imdb-13k/", # the directory that contains query.sql file(s)
+        opt_plan_path = './job_ceb-13k-0_plans/', # the path used to store explain outputs and guidelines
         internal_dir = './internal/', # the path to store intermediary files
         labeled_data_dir = './labeled_data/',
         sample_size = 2000, # number of samples used per table
