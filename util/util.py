@@ -35,6 +35,60 @@ def set_seed(seed=0):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
+
+def load_queries_from_folder(input_dir):
+    query_ids, queries = [], []
+    query_ids, queries = recurse_subfolders(input_dir,query_ids,queries)
+
+    return queries, query_ids
+
+
+def recurse_subfolders(input_dir,query_ids,queries):
+    
+    input_dir_enc = os.fsencode(input_dir)
+    
+    for file in os.listdir(input_dir_enc):
+        
+        filename = os.fsdecode(file)
+        filedir = os.path.join(input_dir,filename)
+        
+        if os.path.isdir(filedir):
+            print("enter",filedir)
+            query_ids, queries = recurse_subfolders(filedir,query_ids,queries)
+        elif filename.endswith(".sql"):
+            print("load from", filename)
+            q_ids, qs = load_queries_from_file(input_dir,filename)
+            query_ids.extend(q_ids)
+            queries.extend(qs)
+        else:
+            pass
+
+    return query_ids, queries
+
+
+def load_queries_from_file(input_dir,filename):
+    
+    query_ids = [filename.split('.')[0][:7]]
+    queries = []
+    
+    with open(os.path.join(input_dir, filename)) as f:
+        
+        file_lines = f.readlines()
+        file_content = []
+        
+        for line in file_lines:
+            if line.strip('\n').strip(' ') != '':
+                file_content.append(line)
+        
+        file_content=''.join(file_content)
+        
+        queries.extend(['SELECT '+query.strip(';')+';' for query in re.split('SELECT |select ',file_content)[1:]])
+    
+    if len(query_ids) != len(queries):
+        query_ids = ['q{}'.format(i) for i in range(len(queries))]
+    
+    return query_ids, queries
+
 def load_input_queries(input_dir):
     queries = []
     query_ids = []
@@ -42,7 +96,8 @@ def load_input_queries(input_dir):
     for file in os.listdir(input_dir_enc):
         filename = os.fsdecode(file)
         if filename.endswith(".sql"):
-            query_ids.append(filename.split('.')[0])
+            qid = filename.split('.')[0]
+            query_ids.append(qid)
             with open(os.path.join(input_dir, filename)) as f:
                 file_lines = f.readlines()
                 file_content = []
