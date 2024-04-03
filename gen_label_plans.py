@@ -147,7 +147,7 @@ def gen_label_plans(start, num_samples, data_slice, schema_name, encFileID, conn
                     
                     # update the timeout threshold if `dynamic_timeout == True`
                     if dynamic_timeout:
-                        new_timeout_thr = math.ceil(max(timeout_thr,opt_latency*dynamic_timeout_factor))
+                        new_timeout_thr = math.ceil(min(timeout_thr,opt_latency*dynamic_timeout_factor))
                     else:
                         new_timeout_thr = timeout_thr
                     
@@ -205,19 +205,19 @@ if __name__ == '__main__':
 
     gen_label_plans(
         data_slice= None, # Specify the max number of queries to process
-        start = 0, # alternative to data_slice, gives the starting index, must be provided together with `num_samples`
+        start = 1, # alternative to data_slice, gives the starting index, must be provided together with `num_samples`
         num_samples = 500, # alternative to data_slice, gives the number of samples, must be provided together with `start`
         schema_name = 'imdb', # schema name
-        encFileID = "ceb-13k-500-0", # a unique id for the dataset
+        encFileID = "ceb-13k-500-1", # a unique id for the dataset
         conn_str_path = './conn_str', # path to the file containing a connection string to the database
         input_dir = "./input/ceb-imdb-13k/", # the directory that contains query.sql file(s)
-        opt_plan_path = './job_ceb-13k-0_plans/', # the path used to store explain outputs and guidelines
+        opt_plan_path = './job_ceb-13k-1_plans/', # the path used to store explain outputs and guidelines
         internal_dir = './internal/', # the path to store intermediary files
         labeled_data_dir = './labeled_data/',
         sample_size = 2000, # number of samples used per table
-        timeout_thr = 30, # timeout threshold to avoid long running query/plans 
+        timeout_thr = 60, # timeout threshold to avoid long running query/plans 
         dynamic_timeout = True, # determines whether dynamic timeout is used 
-        dynamic_timeout_factor = 5 # determines the multiplier for the dynamic timeout with respect to the optimizer's plan as a baseline, used only when `dynamic_timeout = True`
+        dynamic_timeout_factor = 10 # determines the multiplier for the dynamic timeout with respect to the optimizer's plan as a baseline, used only when `dynamic_timeout = True`
         )
 
     
