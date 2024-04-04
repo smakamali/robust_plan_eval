@@ -126,30 +126,59 @@ class dropConst(BaseTransform):
 class target_transform:
     r"""applis min-max scaling or its inverse on target values
     """
-    def __init__(self, train_set): # fit
-        _, minTarget, maxTarget = getStats(train_set.y)       
+    def __init__(self, train_set, target = 'latency'): # fit
+        
+        self.target = target
+
+        if self.target == 'latency':
+            _, minTarget, maxTarget = getStats(train_set.y)       
+        elif self.target == 'cost':
+            _, minTarget, maxTarget = getStats(train_set.opt_cost)
+        else:
+            raise Exception('target must be either `latency` or `cost`')
+        
         self.minTarget = minTarget
         self.maxTarget = maxTarget
 
     def transform(self, data_set: Dataset) -> Dataset:
-        data_set._data.y_t = minmaxScaling(data_set.y, self.minTarget, self.maxTarget)
+        if self.target == 'latency':
+            data_set._data.y_t = minmaxScaling(data_set.y, self.minTarget, self.maxTarget)
+        elif self.target == 'cost':
+            data_set._data.y_t = minmaxScaling(data_set.opt_cost, self.minTarget, self.maxTarget)
+        else:
+            raise Exception('target must be either `latency` or `cost`')
         return data_set
     
     def inverse_transform(self, y):
         out = minmaxScaling_inv(y, self.minTarget, self.maxTarget)
         return out
-
+    
 class target_log_transform:
     r"""applis min-max scaling or its inverse on target values
     """
-    def __init__(self, train_set): # fit
-        y_t = log10Transform(train_set.y)
+    def __init__(self, train_set, target = 'latency'): # fit
+        
+        self.target = target
+        
+        if self.target == 'latency':
+            y_t = log10Transform(train_set.y)
+        elif self.target == 'cost':
+            y_t = log10Transform(train_set.opt_cost)
+        else:
+            raise Exception('target must be either `latency` or `cost`')
+
         _, minTarget, maxTarget = getStats(y_t)       
         self.minTarget = minTarget
         self.maxTarget = maxTarget
 
     def transform(self, data_set: Dataset) -> Dataset:
-        out = log10Transform(data_set.y)        
+        if self.target == 'latency':
+            out = log10Transform(data_set.y)        
+        elif self.target == 'cost':
+            out = log10Transform(data_set.opt_cost) 
+        else:
+            raise Exception('target must be either `latency` or `cost`')
+        
         data_set._data.y_t = minmaxScaling(out, self.minTarget, self.maxTarget)
         return data_set
     
