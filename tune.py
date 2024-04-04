@@ -17,7 +17,7 @@ from util.custom_loss import aleatoric_loss, rmse_loss
 
 # Experiment parameters
 architecture_p = 'roq'
-experiment_id = 'ceb_750'
+experiment_id = 'ceb_750_r2'
 cpus_per_trial = 3 # determines the number of cpus used by each experiment. when OOM happens, reducing this value may help to resolve by reducing the number of concurrent 
 gpus_per_trial = 0.17 # determines the number (or ratio) of gpus used by each experiment
 num_samples=500
@@ -105,24 +105,32 @@ val_set = yTransFunc.transform(val_set)
 config = {
     # Neo's param search space
 
-    'query_module_in': tune.choice([128,256,512]),
-    'query_module_out': tune.choice([16,32,64]),
+    # 'query_module_in': tune.choice([128,256,512]),
+    'query_module_in': tune.choice([128]),
+    # 'query_module_out': tune.choice([16,32,64]),
+    'query_module_out': tune.choice([16]),
 
-    'TCNNin':tune.choice([64,128,256]),
-    'TCNNout':tune.choice([32,64]),
+    # 'TCNNin':tune.choice([64,128,256]),
+    'TCNNin':tune.choice([256]),
+    # 'TCNNout':tune.choice([32,64]),
+    'TCNNout':tune.choice([32]),
 
-    'finalMLPin': tune.choice([128,256,512]),
-    'finalMLPout': tune.choice([64,128]),
+    # 'finalMLPin': tune.choice([128,256,512]),
+    'finalMLPin': tune.choice([512]),
+    # 'finalMLPout': tune.choice([64,128]),
+    'finalMLPout': tune.choice([64]),
     
-    'batch_size': tune.choice([128,256,512]),
-    # 'dropout': tune.uniform(0.05,.2),
-    'dropout': tune.choice([.1]),
-    # 'lr': tune.qloguniform(1e-4, 1e-2, 5e-5),
-    'lr': tune.choice([1e-3]),
-    # "rlrop_patience": tune.choice([5,7,10]),
-    "rlrop_patience": tune.choice([10]),
-    # "rlrop_factor": tune.uniform(0.9,0.1)
-    "rlrop_factor": tune.choice([0.5])
+    # 'batch_size': tune.choice([128,256,512]),
+    'batch_size': tune.choice([512]),
+
+    'dropout': tune.uniform(0.05,.2),
+    # 'dropout': tune.choice([.1]),
+    'lr': tune.qloguniform(1e-4, 1e-2, 5e-5),
+    # 'lr': tune.choice([1e-3]),
+    "rlrop_patience": tune.choice([5,6,7,8,9,10]),
+    # "rlrop_patience": tune.choice([10]),
+    "rlrop_factor": tune.uniform(0.9,0.1)
+    # "rlrop_factor": tune.choice([0.5])
 }
 
 
