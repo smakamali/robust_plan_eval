@@ -3,11 +3,12 @@
 import os
 import pytorch_lightning as pl
 import ray
+import numpy as np
 from ray import air, tune
 from ray.tune.schedulers import ASHAScheduler
 from ray.tune.integration.pytorch_lightning import TuneReportCheckpointCallback
 from torch_geometric.loader import DataLoader
-from pyg_data import queryPlanPGDataset
+from pyg_data import queryPlanPGDataset_withbenchmark
 from util.util import set_seed
 from util.data_transform import *
 from lcm.roq_model import lcm_pl as roq
@@ -15,22 +16,24 @@ from lcm.neo_bao_model import lcm_pl as neo_bao
 from util.custom_loss import aleatoric_loss, rmse_loss
 
 # Experiment parameters
-architecture_p = 'neo'
-experiment_id = 'job_syn'
+architecture_p = 'roq'
+experiment_id = 'ceb_750'
 cpus_per_trial = 3 # determines the number of cpus used by each experiment. when OOM happens, reducing this value may help to resolve by reducing the number of concurrent 
-gpus_per_trial = 0.14 # determines the number (or ratio) of gpus used by each experiment
+gpus_per_trial = 0.17 # determines the number (or ratio) of gpus used by each experiment
 num_samples=500
-num_epochs=64
-patience=6
+num_epochs=100
+patience=15
 
 # queryPlanPGDataset data module parameteres
-files_id = 'job_syn_all'
+files_id = 'ceb_750'
+benchmark_files_id = 'job_main'
 labeled_data_dir = './labeled_data/'
 results_dir ='./param_data/'
-seed = 0
+seed = 2
 reload_data = False
-val_ratio = .1
-test_ratio = 200
+val_samples = .1
+test_samples = 100
+test_slow_samples = None
 
 if not os.path.exists(results_dir):
     os.mkdir(results_dir)
@@ -41,43 +44,63 @@ set_seed(seed)
 
 # Load train,v alidation, and test datasets
 print("loading train")
-train_set = queryPlanPGDataset(
-    split= 'train', files_id = files_id, labeled_data_dir=labeled_data_dir,  force_reload=reload_data, num_samples = None,
-    val_samples = val_ratio, test_samples = test_ratio, seed = seed
+train_set = queryPlanPGDataset_withbenchmark(
+    split= 'train', 
+    files_id = files_id, 
+    benchmark_files_id=benchmark_files_id,
+    labeled_data_dir=labeled_data_dir,  
+    force_reload=reload_data, 
+    val_samples = val_samples, 
+    test_samples = test_samples, 
+    test_slow_samples=test_slow_samples, 
+    seed = seed,
+    exp_id=experiment_id
     )
-print("Number of samples in training dataset: ",train_set.len())
+print("{} queries and {} samples in training dataset: ".format(np.unique(np.array(train_set.query_id)).shape[0],train_set.len()))
+
 print("loading val")
-val_set = queryPlanPGDataset(split= 'val', files_id = files_id)
-print("Number of samples in vlidation dataset: ",val_set.len())
-print("loading test")
-test_set = queryPlanPGDataset(split= 'test', files_id = files_id)
-print("Number of samples in test dataset: ",test_set.len())
+val_set = queryPlanPGDataset_withbenchmark(
+    split= 'val', 
+    files_id = files_id,
+    exp_id=experiment_id
+    )
+print("{} queries and {} samples in vlidation dataset: ".format(np.unique(np.array(val_set.query_id)).shape[0],val_set.len()))
+    
+# print("loading test")
+# test_set = queryPlanPGDataset_withbenchmark(
+#     split= test_split, 
+#     files_id = files_id,
+#     exp_id=experiment_id
+#     )
+# print("{} queries and {} samples in test dataset: ".format(np.unique(np.array(test_set.query_id)).shape[0],test_set.len()))
+    
 
 # Perform data transformations on inputs 
 drop_const = dropConst(train_set)
 train_set = drop_const(train_set)
 val_set = drop_const(val_set)
-test_set = drop_const(test_set)
+# test_set = drop_const(test_set)
 
 null_imp = nullImputation(train_set)
 train_set = null_imp(train_set)
 val_set = null_imp(val_set)
-test_set = null_imp(test_set)
+# test_set = null_imp(test_set)
 
 minmax_scale = minmaxScale(train_set)
 train_set = minmax_scale(train_set)
 val_set = minmax_scale(val_set)
-test_set = minmax_scale(test_set)
+# test_set = minmax_scale(test_set)
 
 # Perform data transformations on targets 
-if 'roq' in architecture_p:
-    yTransFunc = target_log_transform(train_set)
-else:
-    yTransFunc = target_transform(train_set)
+yTransFunc = target_log_transform(train_set)
+# if 'roq' in architecture_p:
+#     yTransFunc = target_log_transform(train_set)
+# else:
+#     yTransFunc = target_transform(train_set)
 
 train_set = yTransFunc.transform(train_set)
 val_set = yTransFunc.transform(val_set)
-test_set = yTransFunc.transform(test_set)
+# test_set = yTransFunc.transform(test_set)
 
 config = {
     # Neo's param search space
@@ -92,8 +115,14 @@ config = {
     'finalMLPout': tune.choice([64,128]),
     
     'batch_size': tune.choice([128,256,512]),
-    'dropout': tune.uniform(0.05,.2),
-    'lr': tune.qloguniform(1e-4, 1e-2, 5e-5),
+    # 'dropout': tune.uniform(0.05,.2),
+    'dropout': tune.choice([.1]),
+    # 'lr': tune.qloguniform(1e-4, 1e-2, 5e-5),
+    'lr': tune.choice([1e-3]),
+    # "rlrop_patience": tune.choice([5,7,10]),
+    "rlrop_patience": tune.choice([10]),
+    # "rlrop_factor": tune.uniform(0.9,0.1)
+    "rlrop_factor": tune.choice([0.5])
 }
 
 
@@ -203,7 +232,7 @@ def train_model(config,num_epochs,data,cpus,architecture_p):
             )
 
     
-    metrics = {"loss": "ptl/val_loss"}
+    metrics = {"loss": "val_loss"}
     ray_cb = TuneReportCheckpointCallback(
         metrics, save_checkpoints = False ,on="validation_end"
         )
