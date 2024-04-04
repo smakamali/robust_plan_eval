@@ -7,7 +7,7 @@ import pickle
 import json
 import torch
 import numpy as np
-from pyg_data import queryPlanPGDataset
+from pyg_data import queryPlanPGDataset,queryPlanPGDataset_withbenchmark
 from util.util import set_seed, load_model_params
 from util.data_transform import *
 from util.custom_loss import aleatoric_loss, rmse_loss
@@ -19,10 +19,11 @@ models_path = os.path.join('.','lightning_models')
 
 def train(
     experiment_id = 'job', architecture_p = 'roq', 
-    files_id = 'temp', labeled_data_dir = './labeled_data/',
+    files_id = 'temp',benchmark_files_id='job_main', labeled_data_dir = './labeled_data/',
     max_epochs = 1000, patience = 100, num_experiments = 5, 
     num_workers = 10, seed = 0, reload_data = False, 
-    val_samples = 0.1,test_samples = 200,test_longrun_share=None):
+    val_samples = 0.1,test_samples = 200,test_slow_samples=None,
+    target = 'latency'):
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -38,46 +39,60 @@ def train(
 
     # Load train,v alidation, and test datasets
     print("loading train")
-    train_set = queryPlanPGDataset(
-        split= 'train', files_id = files_id, 
+    train_set = queryPlanPGDataset_withbenchmark(
+        split= 'train', 
+        files_id = files_id, 
+        benchmark_files_id=benchmark_files_id,
         labeled_data_dir=labeled_data_dir,  
         force_reload=reload_data, 
-        val_samples = val_samples, test_samples = test_samples, test_longrun_share=test_longrun_share,
-        seed = seed
+        val_samples = val_samples, 
+        test_samples = test_samples, 
+        test_slow_samples=test_slow_samples, 
+        seed = seed,
+        exp_id=experiment_id
         )
-    print("Number of samples in training dataset: ",train_set.len())
+    print("{} queries and {} samples in training dataset: ".format(np.unique(np.array(train_set.query_id)).shape[0],train_set.len()))
+
     print("loading val")
-    val_set = queryPlanPGDataset(split= 'val', files_id = files_id)
-    print("Number of samples in vlidation dataset: ",val_set.len())
-    print("loading test")
-    test_set = queryPlanPGDataset(split= 'test', files_id = files_id)
-    print("Number of samples in test dataset: ",test_set.len())
+    val_set = queryPlanPGDataset_withbenchmark(
+        split= 'val', 
+        files_id = files_id,
+        exp_id=experiment_id
+        )
+    print("{} queries and {} samples in vlidation dataset: ".format(np.unique(np.array(val_set.query_id)).shape[0],val_set.len()))
+    
+    # print("loading test")
+    # test_set = queryPlanPGDataset_withbenchmark(split= 'test', files_id = files_id)
+    # print("{} queries and {} samples in test dataset: ".format(np.unique(np.array(test_set.query_id)).shape[0],test_set.len()))
+
 
     # Perform data transformations on inputs 
     drop_const = dropConst(train_set)
     train_set = drop_const(train_set)
     val_set = drop_const(val_set)
-    test_set = drop_const(test_set)
+    # test_set = drop_const(test_set)
 
     null_imp = nullImputation(train_set)
     train_set = null_imp(train_set)
     val_set = null_imp(val_set)
-    test_set = null_imp(test_set)
+    # test_set = null_imp(test_set)
 
     minmax_scale = minmaxScale(train_set)
     train_set = minmax_scale(train_set)
     val_set = minmax_scale(val_set)
-    test_set = minmax_scale(test_set)
+    # test_set = minmax_scale(test_set)
 
     # Perform data transformations on targets 
-    if 'roq' in architecture_p:
-        yTransFunc = target_log_transform(train_set)
-    else:
-        yTransFunc = target_transform(train_set)
+    yTransFunc = target_log_transform(train_set, target = target)
+
+    # if 'roq' in architecture_p:
+    #     yTransFunc = target_log_transform(train_set, target = target)
+    # else:
+    #     yTransFunc = target_transform(train_set, target = target)
 
     train_set = yTransFunc.transform(train_set)
     val_set = yTransFunc.transform(val_set)
-    test_set = yTransFunc.transform(test_set)
+    # test_set = yTransFunc.transform(test_set)
 
     plan_attr_shape = train_set[0].plan_attr.shape
     plan_ord_shape = train_set[0].plan_ord.shape
@@ -208,16 +223,19 @@ if __name__ == '__main__':
     # freeze_support()
 
     train(
-        experiment_id = 'temp', 
-        architecture_p = 'bao',
+        experiment_id = 'job_syn_slow',
+        architecture_p = 'roq',
         files_id='job_syn_all',
+        benchmark_files_id ='job_main',
         labeled_data_dir='./labeled_data',
-        max_epochs = 50, 
-        patience = 100, 
-        num_experiments = 1, 
-        num_workers = 3, 
+        max_epochs = 50,
+        patience = 100,
+        num_experiments = 1,
+        num_workers = 3,
         seed = 0,
         reload_data = True,
-        val_samples = 0.1,
-        test_samples = 200
+        val_samples = 500,
+        test_samples = 500,
+        test_slow_samples = 0.8,
+        target = 'latency'
         )

@@ -1,3 +1,5 @@
+# TODO: expose learning rate scheduler parameters
+
 import os
 import pickle
 from train import train
@@ -11,12 +13,12 @@ if __name__ == '__main__':
 
     architectures = [
                     # 'neo_plus',
-                    'neo',
                     # 'bao_plus',
-                    'bao',
-                    'roq', 
-                     ]
-    experiment_id = 'job_syn'
+                    # 'neo',
+                    # 'bao',
+                    'roq',
+                    ]
+    experiment_id = 'ceb_750'
     
     training_time_dict  = {}
     for arch in architectures:
@@ -24,13 +26,19 @@ if __name__ == '__main__':
         training_time = train(
             experiment_id = experiment_id,
             architecture_p = arch,
-            files_id='job_syn_all_pluslongrun',
+            files_id= 'ceb_750',
+            benchmark_files_id = 'job_main',
             labeled_data_dir='./labeled_data',
-            max_epochs = 1000, patience = 10, 
-            num_experiments = 5, num_workers = 5,
-            seed = 0, reload_data = False,
-            val_samples = 500, test_samples = 500,
-            test_longrun_share = None
+            max_epochs = 1000,
+            patience = 50,
+            num_experiments = 5,
+            num_workers = 5,
+            seed = 2,
+            reload_data = True,
+            val_samples = 0.1,
+            test_samples = 100,
+            test_slow_samples = None,
+            target = 'latency'
             )
         
         training_time_dict[arch] = training_time

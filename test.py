@@ -8,7 +8,7 @@ import json
 import torch
 import numpy as np
 import pandas as pd
-from pyg_data import queryPlanPGDataset
+from pyg_data import queryPlanPGDataset_withbenchmark
 from util.util import set_seed, load_model_params, load_best_model_paths
 from util.data_transform import *
 from util.custom_loss import aleatoric_loss, rmse_loss
@@ -22,8 +22,19 @@ from util.eval_util import *
 
 results_dir = os.path.join('.','results')
    
-def test(experiment_id = 'job',
-         files_id = 'temp', try_gpu_inf=True, seed = 0, num_workers=5, show_fig = False):
+def test(
+        experiment_id = 'job',
+        files_id = 'temp', try_gpu_inf=True, 
+        seed = 1, num_workers=5, show_fig = False,
+        benchmark_files_id='',
+        test_split = 'test',
+        cons_ratio_sp = np.arange(0.0,3,0.1),
+        prune_ratio_sp = np.arange(0,.75,0.05),
+        reload_data = True,
+        val_samples = 500,
+        test_samples = 500,
+        test_slow_samples = None
+        ):
 
     set_seed(seed)
 
@@ -53,24 +64,32 @@ def test(experiment_id = 'job',
 
     # Load train, validation, and test datasets
     print("loading train")
-    train_set = queryPlanPGDataset(
+    train_set = queryPlanPGDataset_withbenchmark(
         split= 'train', files_id = files_id,
-        force_reload=False, seed = seed 
+        benchmark_files_id=benchmark_files_id,
+        force_reload=reload_data, seed = seed,
+        val_samples = val_samples, test_samples = test_samples,
+        test_slow_samples = test_slow_samples,
+        exp_id=experiment_id
         )
     print("{} queries and {} samples in training dataset: ".format(np.unique(np.array(train_set.query_id)).shape[0],train_set.len()))
     
     print("loading val")
-    val_set = queryPlanPGDataset(
-        split= 'val', files_id = files_id
+    val_set = queryPlanPGDataset_withbenchmark(
+        split= 'val', 
+        files_id = files_id,
+        exp_id=experiment_id
         )
     print("{} queries and {} samples in vlidation dataset: ".format(np.unique(np.array(val_set.query_id)).shape[0],val_set.len()))
     
     print("loading test")
-    test_set = queryPlanPGDataset(
-        split= 'test', files_id = files_id
+    test_set = queryPlanPGDataset_withbenchmark(
+        split= test_split, 
+        files_id = files_id,
+        exp_id=experiment_id
         )
     print("{} queries and {} samples in test dataset: ".format(np.unique(np.array(test_set.query_id)).shape[0],test_set.len()))
-
+    
     # Perform data transformations on inputs 
     drop_const = dropConst(train_set)
     train_set = drop_const(train_set)
@@ -89,7 +108,7 @@ def test(experiment_id = 'job',
 
     # Initialize data transformations on targets 
     yTransFunc_log = target_log_transform(train_set)
-    yTransFunc = target_transform(train_set)
+    # yTransFunc = target_transform(train_set)
 
     # Capture node, edge, graph, and plan attribute shapes to initialize the model 
     plan_attr_shape = train_set[0].plan_attr.shape
@@ -138,7 +157,8 @@ def test(experiment_id = 'job',
 
     # For loop starts here
 
-    for i,_ in enumerate(best_model_paths):
+    # for i,_ in enumerate(best_model_paths):
+    for i in [0,2,3,4]:
         best_model_path = best_model_paths[i]
         neo_path = neo_paths[i]
         bao_path = bao_paths[i]
@@ -223,9 +243,9 @@ def test(experiment_id = 'job',
         ########## Make predication for Neo and Bao ##########
 
         # Replace the transformed targets with ones suitable for Neo and Bao
-        train_set = yTransFunc.transform(train_set)
-        val_set = yTransFunc.transform(val_set)
-        test_set = yTransFunc.transform(test_set)
+        # train_set = yTransFunc.transform(train_set)
+        # val_set = yTransFunc.transform(val_set)
+        # test_set = yTransFunc.transform(test_set)
 
         val_loader = DataLoader(
             val_set, batch_size=batch_size,
@@ -242,12 +262,12 @@ def test(experiment_id = 'job',
         # Neo
         ypreds_test_neo_vanilla = trainer.predict(neo_vanilla, test_loader)
         neo_preds2_vanilla = torch.vstack(ypreds_test_neo_vanilla).numpy()
-        neo_preds2_org_vanilla=yTransFunc.inverse_transform(torch.Tensor(neo_preds2_vanilla))
+        neo_preds2_org_vanilla=yTransFunc_log.inverse_transform(torch.Tensor(neo_preds2_vanilla))
 
         # Bao
         ypreds_test_bao_vanilla = trainer.predict(bao_vanilla, test_loader)
         bao_preds2_vanilla = torch.vstack(ypreds_test_bao_vanilla).numpy()
-        bao_preds2_org_vanilla=yTransFunc.inverse_transform(torch.Tensor(bao_preds2_vanilla))
+        bao_preds2_org_vanilla=yTransFunc_log.inverse_transform(torch.Tensor(bao_preds2_vanilla))
 
         
         ############ Tuning strategy parameters ############
@@ -259,7 +279,7 @@ def test(experiment_id = 'job',
             ypreds_val_m,ypreds_val_Ud+ypreds_val_Um,
             val_set,
             minimize = 'runtime',
-            ratios = np.arange(0.0,2,0.05)
+            ratios = cons_ratio_sp
             )
 
         cons_total_ratio_RN={'cons_ratio':cons_total_ratio_RN}
@@ -270,8 +290,8 @@ def test(experiment_id = 'job',
             val_set,
             strategy='conservative',
             minimize = 'runtime',
-            p1_grid = np.arange(0,.5,0.025),
-            p2_grid = np.arange(0,.5,0.025),
+            p1_grid = prune_ratio_sp,
+            p2_grid = prune_ratio_sp,
             strategy_args=cons_total_ratio_RN
             )
 
@@ -279,7 +299,7 @@ def test(experiment_id = 'job',
             ypreds_val_m,ypreds_val_Ud+ypreds_val_Um,
             val_set,
             minimize = 'subopt',
-            ratios = np.arange(0.0,2,0.05)
+            ratios = cons_ratio_sp
             )
         
         cons_total_ratio_SO={'cons_ratio':cons_total_ratio_SO}
@@ -290,8 +310,8 @@ def test(experiment_id = 'job',
             val_set,
             strategy='conservative',
             minimize = 'subopt',
-            p1_grid = np.arange(0,.5,0.025),
-            p2_grid = np.arange(0,.5,0.025),
+            p1_grid = prune_ratio_sp,
+            p2_grid = prune_ratio_sp,
             strategy_args=cons_total_ratio_SO
             )
 
@@ -299,7 +319,7 @@ def test(experiment_id = 'job',
             ypreds_val_m,ypreds_val_Ud,
             val_set,
             minimize = 'runtime',
-            ratios = np.arange(0.0,2,0.05)
+            ratios = cons_ratio_sp
             )
         
         cons_data_ratio_RN={'cons_ratio':cons_data_ratio_RN}
@@ -310,7 +330,7 @@ def test(experiment_id = 'job',
             val_set,
             strategy='conservative',
             minimize = 'runtime',
-            p1_grid = np.arange(0,.5,0.025),
+            p1_grid = prune_ratio_sp,
             strategy_args=cons_data_ratio_RN
             )
 
@@ -318,7 +338,7 @@ def test(experiment_id = 'job',
             ypreds_val_m,ypreds_val_Ud,
             val_set,
             minimize = 'subopt',
-            ratios = np.arange(0.0,2,0.05)
+            ratios = cons_ratio_sp
             )
         
         cons_data_ratio_SO={'cons_ratio':cons_data_ratio_SO}
@@ -329,7 +349,7 @@ def test(experiment_id = 'job',
             val_set,
             strategy='conservative',
             minimize = 'subopt',
-            p1_grid = np.arange(0,.5,0.025),
+            p1_grid = prune_ratio_sp,
             strategy_args=cons_data_ratio_SO
             )
 
@@ -337,7 +357,8 @@ def test(experiment_id = 'job',
             ypreds_val_m,ypreds_val_Um,
             val_set,
             minimize = 'runtime',
-            ratios = np.arange(0.0,2,0.05))
+            ratios = cons_ratio_sp
+            )
         
         cons_model_ratio_RN={'cons_ratio':cons_model_ratio_RN}
 
@@ -347,14 +368,15 @@ def test(experiment_id = 'job',
             val_set,
             strategy='conservative',
             minimize = 'runtime',
-            p2_grid = np.arange(0,.5,0.025),
+            p2_grid = prune_ratio_sp,
             strategy_args=cons_model_ratio_RN)
 
         cons_model_ratio_SO = find_optimal_cons_ratio(
             ypreds_val_m,ypreds_val_Um,
             val_set,
             minimize = 'subopt',
-            ratios = np.arange(0.0,2,0.05))
+            ratios = cons_ratio_sp
+            )
         
         cons_model_ratio_SO={'cons_ratio':cons_model_ratio_SO}
 
@@ -364,7 +386,7 @@ def test(experiment_id = 'job',
             val_set,
             strategy='conservative',
             minimize = 'subopt',
-            p2_grid = np.arange(0,.5,0.025),
+            p2_grid = prune_ratio_sp,
             strategy_args=cons_model_ratio_SO
             )
 
@@ -375,8 +397,8 @@ def test(experiment_id = 'job',
             val_set,
             strategy='subopt risk',
             minimize = 'runtime',
-            p1_grid = np.arange(0,.5,0.025),
-            p2_grid = np.arange(0,.5,0.025))
+            p1_grid = prune_ratio_sp,
+            p2_grid = prune_ratio_sp)
 
         risk_total_prune_ratio_SO = find_optimal_prune_ratio(
             'data_prune_ratio',
@@ -384,8 +406,8 @@ def test(experiment_id = 'job',
             val_set,
             strategy='subopt risk',
             minimize = 'subopt',
-            p1_grid = np.arange(0,.5,0.025),
-            p2_grid = np.arange(0,.5,0.025)
+            p1_grid = prune_ratio_sp,
+            p2_grid = prune_ratio_sp
             )
 
         risk_data_prune_ratio_RN = find_optimal_prune_ratio(
@@ -394,7 +416,7 @@ def test(experiment_id = 'job',
             val_set,
             strategy='subopt risk',
             minimize = 'runtime',
-            p1_grid = np.arange(0,.5,0.025))
+            p1_grid = prune_ratio_sp)
 
         risk_data_prune_ratio_SO = find_optimal_prune_ratio(
             'data_prune_ratio',
@@ -402,7 +424,7 @@ def test(experiment_id = 'job',
             val_set,
             strategy='subopt risk',
             minimize = 'subopt',
-            p1_grid = np.arange(0,.5,0.025))
+            p1_grid = prune_ratio_sp)
 
         risk_model_prune_ratio_RN = find_optimal_prune_ratio(
             'data_prune_ratio',
@@ -410,7 +432,7 @@ def test(experiment_id = 'job',
             val_set,
             strategy='subopt risk',
             minimize = 'runtime',
-            p2_grid = np.arange(0,.5,0.025)
+            p2_grid = prune_ratio_sp
             )
 
         risk_model_prune_ratio_SO = find_optimal_prune_ratio(
@@ -419,7 +441,7 @@ def test(experiment_id = 'job',
             val_set,
             strategy='subopt risk',
             minimize = 'subopt',
-            p2_grid = np.arange(0,.5,0.025)
+            p2_grid = prune_ratio_sp
             )
 
         # Threshold for the Optimizer
@@ -429,7 +451,7 @@ def test(experiment_id = 'job',
             val_set,
             strategy='baseline opt',
             minimize = 'runtime',
-            p1_grid = np.arange(0,.5,0.025)
+            p1_grid = prune_ratio_sp
             )
         
             
@@ -551,25 +573,25 @@ def test(experiment_id = 'job',
         ################## Compute q-error ##################
         q_error_num_joins, _ = lcm_model_eval(
             test_set, ypreds_tens_test_org[:,0], 
-            dataset_label = 'Test data', model_label = 'roq',
+            dataset_label = 'test_data', model_label = 'roq',
             load_from_disk=False, files_id = files_id,show_fig=show_fig
             )
         
         roq_mcdp_num_joins, _ = lcm_model_eval(
             test_set, ypreds_test_m_org, 
-            dataset_label = 'Test data', model_label = 'roq',
+            dataset_label = 'test_data', model_label = 'roq',
             load_from_disk=False, files_id = files_id,show_fig=show_fig
             )
         
         neo_qerror2_vanilla, _ = lcm_model_eval(
             test_set, neo_preds2_org_vanilla[:,0], 
-            dataset_label = 'Test data', model_label = 'neo',
+            dataset_label = 'test_data', model_label = 'neo',
             load_from_disk=False, files_id = files_id,show_fig=show_fig
             )
         
         bao_qerror2_vanilla, _ = lcm_model_eval(
             test_set, bao_preds2_org_vanilla[:,0], 
-            dataset_label = 'Test data', model_label = 'bao'
+            dataset_label = 'test_data', model_label = 'bao'
             ,load_from_disk=False, files_id = files_id,show_fig=show_fig
             )
         
@@ -700,18 +722,20 @@ def test(experiment_id = 'job',
             test_risk_model_prune_SO_subopts,
             ]
 
-
+        q_ids = np.unique(np.array(test_set.query_id))
         runtime_details = pd.DataFrame(
             np.array(rt_values).transpose(),
-            columns=labels
+            columns=labels,index=q_ids
             )
         
         runtime_res = compare_with_baseline(rt_values, labels).sort_values(by='total_runtime_change%')
 
         so_labels = [i for i in labels if i not in ['best']]
 
-        subopt_details = pd.DataFrame(np.array(so_values).transpose(),
-                                        columns=so_labels)
+        subopt_details = pd.DataFrame(
+            np.array(so_values).transpose(),
+            columns=so_labels,index=q_ids
+            )
         
         subopt_res = subopt_details.describe(
                         percentiles=[.5,.6,.7,.8,.90,.95,.99]).T
@@ -728,28 +752,36 @@ def test(experiment_id = 'job',
 
 
 
-    with open(os.path.join(results_dir,'qerror_dict_{}.pkl'.format(experiment_id)), 'wb') as file:
+    with open(os.path.join(results_dir,'qerror_dict_{}_{}.pkl'.format(experiment_id,test_split)), 'wb') as file:
         pickle.dump(qerror_dict, file)
 
-    with open(os.path.join(results_dir,'corr_dict_{}.pkl'.format(experiment_id)), 'wb') as file:
+    with open(os.path.join(results_dir,'corr_dict_{}_{}.pkl'.format(experiment_id,test_split)), 'wb') as file:
         pickle.dump(corr_dict, file)
 
-    with open(os.path.join(results_dir,'rt_res_dict_{}.pkl'.format(experiment_id)), 'wb') as file:
+    with open(os.path.join(results_dir,'rt_res_dict_{}_{}.pkl'.format(experiment_id,test_split)), 'wb') as file:
         pickle.dump(rt_res_dict, file)
 
-    with open(os.path.join(results_dir,'so_res_dict_{}.pkl'.format(experiment_id)), 'wb') as file:
+    with open(os.path.join(results_dir,'so_res_dict_{}_{}.pkl'.format(experiment_id,test_split)), 'wb') as file:
         pickle.dump(so_res_dict, file)
 
-    with open(os.path.join(results_dir,'agg_res_dict_{}.pkl'.format(experiment_id)), 'wb') as file:
+    with open(os.path.join(results_dir,'agg_res_dict_{}_{}.pkl'.format(experiment_id,test_split)), 'wb') as file:
         pickle.dump(agg_res_dict, file)
 
 if __name__ == '__main__':
 
     test(
-        experiment_id = 'job_syn',
-        files_id = 'job_syn_all_pluslongrun',
+        experiment_id = 'ceb_750',
+        files_id = 'ceb_750',
+        benchmark_files_id = 'job_main',
+        test_split = 'benchmark',
         try_gpu_inf=True,
-        seed = 0, 
-        num_workers=10,
-        show_fig = False
+        num_workers=1,
+        show_fig = False,
+        cons_ratio_sp = np.arange(0.0,3,0.05),
+        prune_ratio_sp = np.arange(0,.75,0.05),
+        seed = 2,
+        reload_data = False,
+        val_samples = 0.1,
+        test_samples = 100,
+        test_slow_samples = None
         )
