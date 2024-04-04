@@ -8,6 +8,53 @@ from scipy.stats import spearmanr
 from scipy.stats import pearsonr
 from IPython.display import display
 
+def plotxvsy(x, y, xerr=None,err=None, xl='X', yl='Y',scale='linear',lims=None):
+    a = x.reshape(-1)
+    b = y.reshape(-1)
+    err = err.reshape(-1)
+    plt.figure(figsize = (6,6))
+    plt.xlabel(xl)
+    plt.ylabel(yl)
+    if lims is not None:
+        plt.xlim(lims)
+        plt.ylim(lims)
+    plt.xscale(scale)
+    plt.yscale(scale)
+    plt.title(xl+" vs. "+yl)
+    plt.scatter(a,b, s=5)
+    # if err is not None:
+    plt.errorbar(a, b, xerr=xerr,yerr=err, fmt="o")
+    # else:
+    plt.show()
+
+def evalCalib(norm_m,norm_s2,y_t,title=''):
+    import scipy.stats as st
+    norm_s = np.sqrt(norm_s2)
+    CLs= []
+    withinIntervals = []
+    for alpha in np.arange(0,1.01,0.01):
+        p = 1- alpha/2
+        z = st.norm.ppf(p)
+        highBound = norm_m + z*norm_s
+        lowBound = norm_m - z*norm_s
+        withinBounds = ((y_t <= highBound) & (y_t >= lowBound)).sum()
+        CLs.append(1-alpha)
+        withinIntervals.append(withinBounds/y_t.shape[0])
+    CLs = np.array(CLs)
+    withinIntervals = np.array(withinIntervals)
+    a = CLs
+    b = withinIntervals
+    mask = np.isfinite(b)
+    plt.figure(figsize = (8,6))
+    plt.plot(a[mask],b[mask],color = 'tab:orange')
+    x = np.linspace(a.min(), a.max(), 1000)
+    y = x
+    plt.plot(x,y,color = 'tab:blue')
+    plt.title("Calibration plot for "+title)
+    plt.xlabel("Expected confidence interval")
+    plt.ylabel("Observed confidence interval")
+    plt.show()
+
 def plot2dhist(x,y, xl='', yl='', scale='linear'):
     x = x.reshape(-1)
     y = y.reshape(-1)
@@ -225,7 +272,8 @@ def comparetopplansmulti(bm,bs2,p,verbose=False):
     return R.mean(axis=2)
 
 def evaluate_method(pred, uncertainty, data_obj, strategy, 
-                    prune=False, volatility=None, **kwargs):
+                    prune=False, volatility=None, 
+                    return_targets=False, **kwargs):
 
     tic = time.time()
 
@@ -260,6 +308,7 @@ def evaluate_method(pred, uncertainty, data_obj, strategy,
     corr_all=[]
     target_super=[]
     runtime_super=[]
+    prune_msk_super=[]
     count_fail = 0
     query_ids = np.array(data_obj.query_id)
     for _, q in enumerate(np.unique(query_ids)):
@@ -308,6 +357,7 @@ def evaluate_method(pred, uncertainty, data_obj, strategy,
                 msk4 = (model_unc_sub <= kwargs['max_model_uncertainty'])
                 prune_msk = prune_msk & msk4
 
+        prune_msk_super.extend(prune_msk.tolist())
         runtime_sub=runtime[prune_msk]
         runtime_t_sub=runtime_t[prune_msk]
 
@@ -357,10 +407,11 @@ def evaluate_method(pred, uncertainty, data_obj, strategy,
         best_runtimes.append(best_runtime.item())
     target_super = np.array(target_super).squeeze()
     runtime_super = np.array(runtime_super).squeeze()
-    corr_all = np.corrcoef(target_super,runtime_super)[0,1]
+    corr_all = compute_spearmanr(target_super,runtime_super,verbose=False)
     strategy_runtimes=np.array(strategy_runtimes).squeeze()
     best_runtimes=np.array(best_runtimes).squeeze()
     subopts = strategy_runtimes/best_runtimes
+    prune_msk_super = np.array(prune_msk_super).squeeze()
     
     toc = time.time()
 
@@ -372,11 +423,14 @@ def evaluate_method(pred, uncertainty, data_obj, strategy,
     print('evaluation time:', evaluation_time)
     print('')
     
+    results = [subopts,strategy_runtimes,best_runtimes]
     if volatility is not None:
         strategy_plan_volatilities=np.array(strategy_plan_volatilities).reshape(-1)
-        return subopts,strategy_runtimes,best_runtimes,strategy_plan_volatilities
-    else:
-        return subopts,strategy_runtimes,best_runtimes
+        results.append(strategy_plan_volatilities)
+    if return_targets:
+        results.extend([target_super,prune_msk_super])
+    
+    return tuple(results)
 
 import os
 
@@ -396,8 +450,10 @@ def lcm_model_eval(test_set= None, ypreds_tens_test_org= None,
         q_error_alt_list = []
         num_joins_list = []
         num_joins_qe_list = []
+        query_id_lst = []
         query_ids = np.array(test_set.query_id)
         for query_id in np.unique(query_ids):
+            query_id_lst.append(query_id)
             msk = (query_ids == query_id)
             num_join = test_set.num_joins[msk][0]
             num_joins = test_set.num_joins[msk]
@@ -420,6 +476,7 @@ def lcm_model_eval(test_set= None, ypreds_tens_test_org= None,
         q_error_tensor = torch.cat(q_error_list)
         q_error_alt_tensor = torch.cat(q_error_alt_list)
         num_joins_qe_tensor = torch.cat(num_joins_qe_list)
+        query_id_lst = np.array(query_id_lst)
         torch.save((q_error_tensor,q_error_alt_tensor,num_joins_qe_tensor,ml_subOptTensor, db2_subOptTensor, num_joins_so_tensor),
                    os.path.join(results_dir, 'eval_res_{}_{}_{}.pt'.format(model_label,dataset_label,files_id))
                    )
@@ -427,7 +484,7 @@ def lcm_model_eval(test_set= None, ypreds_tens_test_org= None,
     # put results in dataframes
     q_error_num_joins = pd.DataFrame((q_error_tensor.numpy(), q_error_alt_tensor.numpy(),num_joins_qe_tensor.numpy())).T
     q_error_num_joins.columns = ['q_error','q_error_alt', 'num_joins']
-    subopt_num_joins = pd.DataFrame((ml_subOptTensor.numpy(), db2_subOptTensor.numpy(),num_joins_so_tensor.numpy())).T
+    subopt_num_joins = pd.DataFrame((ml_subOptTensor.numpy(), db2_subOptTensor.numpy(),num_joins_so_tensor.numpy()),columns = query_id_lst).T
     subopt_num_joins.columns = ['ml_subopt','db2_subopt', 'num_joins']
     #plot results
     plot_data = [np.log10(q_error_num_joins[q_error_num_joins.num_joins == num].q_error_alt.values) for num in np.sort(q_error_num_joins.num_joins.unique())]
@@ -470,7 +527,7 @@ def lcm_model_eval(test_set= None, ypreds_tens_test_org= None,
     plot_dist_line(subopt_sum,'subopt','subopt for '+dataset_label+' using '+model_label,show_fig=show_fig)
     display(subopt_sum)
 
-    return q_error_num_joins, subopt_sum
+    return q_error_num_joins, subopt_num_joins
 
 def compute_spearmanr(x,y,verbose=True):
     spearmanr_coef, p_value = spearmanr(x,y)
