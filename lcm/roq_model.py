@@ -6,6 +6,8 @@ from torch import nn
 from gnn.query_graph_gnn import transformer_conv_v2
 from torchmetrics.regression import SpearmanCorrCoef
 from util.custom_loss import qErrorLossClass
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.optim import Adam, AdamW
 
 def produce_mlp(inputNumFeat,firstLayerSize,LastLayerSize,dropout,activation=nn.ReLU(), return_module=True):
     mlp_layers = []
@@ -44,7 +46,10 @@ class lcm_pl(pl.LightningModule):
                  with_var = False, device = None,
                  criterion = None,
                  batch_size = None,
-                 lr = 0.001):
+                 lr = 0.001,
+                 rlrop_patience = 10,
+                 rlrop_factor = 0.5,
+                 ):
         super().__init__()
         self.validation_step_outputs = []
         self.with_var = with_var
@@ -62,6 +67,8 @@ class lcm_pl(pl.LightningModule):
         self.node_embd_dim_for_plan = node_embd_dim # used to compress node embeddings before appending to plan nodes - using node_embd_dim for now
         query_graph_embd_dim = query_module_out # for now
         self.lr = lr
+        self.rlrop_patience = rlrop_patience
+        self.rlrop_factor = rlrop_factor
         self.spearmans_corr = SpearmanCorrCoef()
         self.qerror = qErrorLossClass()
         
@@ -72,10 +79,12 @@ class lcm_pl(pl.LightningModule):
 
         if query_processor == 'mlp':
             numQueryFeat = num_node*node_dim + num_edge*edge_dim + numQueryGraphFeat
-            self.queryMLP = produce_mlp(inputNumFeat=numQueryFeat,
-                                    firstLayerSize=query_module_in,
-                                    LastLayerSize=query_module_out,
-                                    dropout=dropout)
+            self.queryMLP = produce_mlp(
+                inputNumFeat=numQueryFeat,
+                firstLayerSize=query_module_in,
+                LastLayerSize=query_module_out,
+                dropout=dropout
+                )
         elif query_processor == 'gnn':
             # GCNN module using TransformerConv
 
@@ -107,9 +116,12 @@ class lcm_pl(pl.LightningModule):
 
         # TCNN module from Neo
         self.guidelineTCNNLayers = []
-        glTCNNLayerSizes = genLayerSizes(inputNumFeat = self.tcnn_in_channels, 
-                                  firstLayerSize = TCNNin, 
-                                  LastLayerSize = TCNNout)
+        glTCNNLayerSizes = genLayerSizes(
+            inputNumFeat = self.tcnn_in_channels, 
+            firstLayerSize = TCNNin, 
+            LastLayerSize = TCNNout
+            )
+        
         for l in glTCNNLayerSizes:
             layerin,layerout = l[0],l[1]
             self.guidelineTCNNLayers.append(tcnn.BinaryTreeConv(layerin, 
@@ -122,28 +134,35 @@ class lcm_pl(pl.LightningModule):
         
         # Final layers
         self.final_layers_in_channels = TCNNout+query_module_out
-        self.finalMLP = produce_mlp(inputNumFeat=self.final_layers_in_channels,
-                                    firstLayerSize=finalMLPin,
-                                    LastLayerSize=finalMLPout,
-                                    dropout=dropout)
+        self.finalMLP = produce_mlp(
+            inputNumFeat=self.final_layers_in_channels,
+            firstLayerSize=finalMLPin,
+            LastLayerSize=finalMLPout,
+            dropout=dropout
+            )
         
         # Mean parameters
-        self.meanLayers = produce_mlp(inputNumFeat=finalMLPout,
-                                    firstLayerSize=finalMLPout,
-                                    LastLayerSize=32,
-                                    dropout=dropout,
-                                    return_module=False)
+        self.meanLayers = produce_mlp(
+            inputNumFeat=finalMLPout,
+            firstLayerSize=finalMLPout,
+            LastLayerSize=32,
+            dropout=dropout,
+            return_module=False
+            )
+        
         self.meanLayers.append(nn.Linear(32, 1))
         self.meanLayers.append(nn.Sigmoid())
         self.mean_layer = nn.Sequential(*self.meanLayers)
         
         # Standard deviation parameters
         if with_var:
-            self.stdLayers = produce_mlp(inputNumFeat=finalMLPout,
-                                    firstLayerSize=finalMLPout,
-                                    LastLayerSize=32,
-                                    dropout=dropout,
-                                    return_module=False)
+            self.stdLayers = produce_mlp(
+                inputNumFeat=finalMLPout,
+                firstLayerSize=finalMLPout,
+                LastLayerSize=32,
+                dropout=dropout,
+                return_module=False
+                )
             self.stdLayers.append(nn.Linear(32, 1))
             self.stdLayers.append(nn.Softplus())
             self.std_layer = nn.Sequential(*self.stdLayers)
@@ -245,8 +264,18 @@ class lcm_pl(pl.LightningModule):
         return metrics_dict
     
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.parameters(),lr=self.lr)
-        return optimizer
+        optimizer = AdamW(self.parameters(),lr=self.lr)
+        scheduler = ReduceLROnPlateau(
+            optimizer,patience=self.rlrop_patience,factor=self.rlrop_factor)
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": scheduler,
+                "monitor": "val_loss",
+                "interval": "epoch",
+                "frequency": 1,
+                }
+            }
     
     def predict_step(self, batch, batch_idx, dataloader_idx=0):
         return self(batch)

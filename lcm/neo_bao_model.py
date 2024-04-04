@@ -13,6 +13,8 @@ from torch_geometric.utils import to_dense_batch,to_dense_adj
 from util.custom_loss import aleatoric_loss
 from torchmetrics.regression import SpearmanCorrCoef
 from util.custom_loss import qErrorLossClass
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.optim import Adam, AdamW
 
 def produce_mlp(inputNumFeat,firstLayerSize,LastLayerSize,dropout,activation=nn.ReLU(), return_module=True):
     mlp_layers = []
@@ -52,7 +54,10 @@ class lcm_pl(pl.LightningModule):
                  criterion = None,
                  batch_size = None,
                  architecture = 'neo',
-                 lr = 0.001):
+                 lr = 0.001,
+                 rlrop_patience = 10,
+                 rlrop_factor = 0.5,
+                 ):
         super().__init__()
         self.validation_step_outputs = []
         self.ext_plan = ext_plan
@@ -72,6 +77,8 @@ class lcm_pl(pl.LightningModule):
         self.node_embd_dim_for_plan = node_embd_dim # used to compress node embeddings before appending to plan nodes - using node_embd_dim for now
         self.query_module_out = query_module_out # for now
         self.lr = lr
+        self.rlrop_patience = rlrop_patience
+        self.rlrop_factor = rlrop_factor
         self.spearmans_corr = SpearmanCorrCoef()
         self.qerror = qErrorLossClass()
         
@@ -237,8 +244,18 @@ class lcm_pl(pl.LightningModule):
         return metrics_dict
     
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.parameters(),lr=self.lr)
-        return optimizer
+        optimizer = AdamW(self.parameters(),lr=self.lr)
+        scheduler = ReduceLROnPlateau(
+            optimizer,patience=self.rlrop_patience,factor=self.rlrop_factor)
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": scheduler,
+                "monitor": "val_loss",
+                "interval": "epoch",
+                "frequency": 1,
+                }
+            }
     
     def predict_step(self, batch, batch_idx, dataloader_idx=0):
         return self(batch)
