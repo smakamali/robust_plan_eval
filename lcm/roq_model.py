@@ -67,6 +67,7 @@ class lcm_pl(pl.LightningModule):
         self.node_embd_dim_for_plan = node_embd_dim # used to compress node embeddings before appending to plan nodes - using node_embd_dim for now
         query_graph_embd_dim = query_module_out # for now
         self.lr = lr
+        self.dropout = dropout
         self.rlrop_patience = rlrop_patience
         self.rlrop_factor = rlrop_factor
         self.spearmans_corr = SpearmanCorrCoef()
