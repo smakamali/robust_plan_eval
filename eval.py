@@ -1,10 +1,7 @@
 ####################### TEST ROQ #######################
 
-# TODO: read model configs from disk
-
 import os
 import pickle
-import json
 import torch
 import numpy as np
 import pandas as pd
@@ -158,7 +155,7 @@ def test(
     # For loop starts here
 
     # for i,_ in enumerate(best_model_paths):
-    for i in [0,2,3,4]:
+    for i in [0,1,2,4]:
         best_model_path = best_model_paths[i]
         neo_path = neo_paths[i]
         bao_path = bao_paths[i]
@@ -770,8 +767,8 @@ def test(
 if __name__ == '__main__':
 
     test(
-        experiment_id = 'ceb_750',
-        files_id = 'ceb_750',
+        experiment_id = 'ceb_1000_x5_s3_loss',
+        files_id = 'ceb_1000',
         benchmark_files_id = 'job_main',
         test_split = 'benchmark',
         try_gpu_inf=True,
@@ -779,7 +776,7 @@ if __name__ == '__main__':
         show_fig = False,
         cons_ratio_sp = np.arange(0.0,3,0.05),
         prune_ratio_sp = np.arange(0,.75,0.05),
-        seed = 2,
+        seed = 3,
         reload_data = False,
         val_samples = 0.1,
         test_samples = 100,

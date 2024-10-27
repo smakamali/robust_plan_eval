@@ -154,6 +154,153 @@ Steps involved in preparing data for a dataset and a workload:
     - `num_samples` : If specified will be used to subsample the entire dataset before splitting. Default: `False`
     - `seed`: A random seed to control reproducibility of dataset splitting. 
 
-## <a id="experiments"></a>Running Experiments
+## <a id="experiments"></a>Running Experiments - Train a model
 
-Coming soon ...
+To train the model use `train.py` script with the desired parameters. An example use case is provided below.
+
+### Example Execution
+
+```python
+if __name__ == '__main__':
+    train(
+        experiment_id = 'job_syn_slow',         # Unique experiment identifier
+        architecture_p = 'roq',                 # Model architecture to use ('roq')
+        files_id = 'job_syn_all',               # File ID for the dataset
+        benchmark_files_id = 'job_main',        # File ID for benchmark dataset
+        labeled_data_dir = './labeled_data',    # Directory containing labeled data
+        max_epochs = 50,                        # Maximum number of epochs to train
+        patience = 100,                         # Early stopping patience 
+        num_experiments = 1,                    # Number of training runs (experiments)
+        num_workers = 3,                        # Number of workers for data loading
+        seed = 0,                               # Seed for reproducibility
+        reload_data = True,                     # Reload data flag
+        val_samples = 500,                      # Number of validation samples
+        test_samples = 500,                     # Number of test samples
+        test_slow_samples = 0.8,                # Proportion of slow queries in test set
+        target = 'latency'                      # Prediction target (latency) - alternatively it can be set to `cost`
+    )
+```
+
+### Parameters
+
+- `experiment_id`: Unique identifier for the experiment.
+- `architecture_p`: The model architecture to use (`roq`, `neo`, `bao`).
+- `files_id`: The ID of the training dataset file.
+- `benchmark_files_id`: The ID of the benchmark dataset file.
+- `labeled_data_dir`: Directory where labeled data files are stored.
+- `max_epochs`: Maximum number of epochs to train the model.
+- `patience`: Number of epochs to wait for improvement before early stopping. A high number ensures training until convergence. A learning rate scheduler is used to avoid overfitting
+- `num_experiments`: Number of independent training runs to execute.
+- `num_workers`: Number of workers for data loading.
+- `seed`: Random seed for reproducibility.
+- `reload_data`: Whether to reload data.
+- `val_samples`: Number of validation samples.
+- `test_samples`: Number of test samples.
+- `test_slow_samples`: Proportion of slow queries in the test set.
+- `target`: Target variable for prediction (`latency` in this case, alternatively it can be set to `cost`).
+
+### Model Architectures
+
+This script supports multiple GNN-based architectures:
+- **ROQ**: A GNN-based architecture specifically designed for query plan latency prediction.
+- **NEO** and **BAO**: Alternative models for comparison.
+
+### Data Preprocessing
+
+The following preprocessing steps are applied to the dataset:
+1. Drop constant features.
+2. Impute missing values.
+3. Scale the data using min-max normalization.
+4. Apply a logarithmic transformation to the target variable (`latency`).
+
+### Training
+
+The script trains the model using PyTorch Lightning, applying early stopping based on validation loss. Checkpoints are saved for the best-performing models.
+
+### Logging and Checkpoints
+
+Training logs are stored using TensorBoard, and model checkpoints are saved to the `./lightning_models` directory. You can monitor training progress in real-time by running:
+
+```bash
+tensorboard --logdir=./lightning_logs
+```
+
+### Example Execution
+
+The following command will start the training process using the ROQ architecture:
+
+```bash
+python train.py
+```
+
+Best models will be saved in the `./lightning_models` directory, and logs can be found in `./lightning_logs`.
+
+## Running Multiple Experiments
+
+USe the script `run_experiments.py` This script orchestrates the training of multiple Graph Neural Network (GNN) architectures for the task of query latency prediction. The model architectures supported are:
+
+- **Neo**
+- **Bao**
+- **Roq**
+
+It calls the `train()` function from the `train.py` module, training each architecture for multiple experiments and saving the training times to a results file.
+
+### Example Usage
+
+First set the parameters in `run_experiments.py`:
+
+```python
+# specify the model to be trained
+architectures = [
+    'bao',
+    'neo',
+    'roq',
+]
+experiment_id = 'all_models_ce'
+
+training_time_dict  = {}
+for arch in architectures:
+    training_time = train(
+        experiment_id = experiment_id,
+        architecture_p = arch,
+        files_id= 'ceb_1000',
+        benchmark_files_id = 'job_main',
+        labeled_data_dir='./labeled_data',
+        max_epochs = 1000,
+        patience = 50,
+        num_experiments = 5,
+        num_workers = 5,
+        seed = 3,
+        reload_data = False,
+        val_samples = 0.1,
+        test_samples = 100,
+        test_slow_samples = None,
+        target = 'latency'
+    )
+    training_time_dict[arch] = training_time
+```
+
+The run the script:
+
+```bash
+python run_experiments.py
+```
+### Output
+
+After running the script, the training times for each architecture will be saved in a pickle file in the `results` directory:
+
+```
+results/training_time_<experiment_id>.pkl
+```
+## Model Evaluation
+For model evaluation use `eval.py` module. This module performs the following tasks:
+
+1. Loads the trained models from checkpoints
+2. Makes inferences
+3. Tunes the plan selection strategy hyperparameters using the validation set
+4. Evaluates the models based on the test set, which involves: computing the q-error, correlations, runtime, suboptimality, and aggregated results and saves them in `qerror_dict{<experiment_id>}_{<test_split>}.pkl`,`corr_dict{<experiment_id>}_{<test_split>}.pkl`,`rt_res_dict{<experiment_id>}_{<test_split>}.pkl`,`so_res_dict{<experiment_id>}_{<test_split>}.pkl`, and `agg_res_dict{<experiment_id>}_{<test_split>}.pkl`respecively.
+
+### Usage example
+```bash
+python eval.py
+```

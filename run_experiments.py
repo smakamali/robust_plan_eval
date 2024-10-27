@@ -12,11 +12,9 @@ if __name__ == '__main__':
     # freeze_support()
 
     architectures = [
-                    # 'neo_plus',
-                    # 'bao_plus',
-                    # 'bao',
+                    'bao',
                     'neo',
-                    # 'roq',
+                    'roq',
                     ]
     experiment_id = 'ceb_1000_x5_s3_loss'
     
