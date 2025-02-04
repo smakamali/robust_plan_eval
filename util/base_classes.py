@@ -7,7 +7,7 @@ import pandas as pd
 import json
 import pickle
 from util.extract_join_attraction import get_query_join_preds
-from util.db_util import db2_explain, db2_execute, get_card_sel, load_db_schema
+from util.db_util import db2_explain, db2_execute, get_card_sel, load_db_schema, annotate_guideline
 from util.extract_stats import combinations_of_2, gini
 from util.query_encoder import encodeOps, getJoinProfile, encodeTypes
 from util.explain_parser import ExplainParser as explain_parser
@@ -19,16 +19,17 @@ def get_default_plan(sql,q_id,schema_name,conn_str,opt_plan_path):
 
     exp_path,guideline,plan_cost=db2_explain(schema_name,sql,query_id=q_id,opt_plan_path=opt_plan_path,gen_exp_output=True,gen_guideline=True, return_cost=True,cmd_verbose=False, conn_str=conn_str)
     
-    res = get_card_sel(conn_str)
+    exp_res = get_card_sel(conn_str)
 
     sel = {}
     card = {}
-    for idx in range(len(res)):
-        row = res.iloc[idx]
-        sel['.'.join([schema_name,row.INPUT_OBJECT])] = row.SELECTIVITY
-        card['.'.join([schema_name,row.INPUT_OBJECT])] = row.OUTPUT_CARD
+    for idx in range(len(exp_res)):
+        row = exp_res.iloc[idx]
+        if row.OPERATOR_TYPE in ['TBSCAN','IXSCAN']:
+            sel['.'.join([schema_name,row.TABLE_NAME])] = row.SELECTIVITY
+            card['.'.join([schema_name,row.TABLE_NAME])] = row.OUTPUT_CARD
     
-    return exp_path, guideline, plan_cost, sel, card
+    return exp_path, guideline, plan_cost, sel, card, exp_res
 
 def ext_sample_info(schema_name,encFileID,tables_dict,query_joins,local_preds,pred_cols,chai2matrixDict,conn_str):
     schema_name = schema_name.upper()
@@ -306,20 +307,23 @@ class Query:
             conn_str = conn_str_f.read()
 
         # get the default plan
-        exp_path, guideline, plan_cost, self.sel, self.card= get_default_plan(self.sql,self.q_id,self.schema,conn_str,self.opt_plan_path)
+        exp_path, guideline, plan_cost, self.sel, self.card, exp_res= get_default_plan(self.sql,self.q_id,self.schema,conn_str,self.opt_plan_path)
         if self.verbose:
             print (">>> cardinaities and selectivities stored in `card` and `sel` attributes.")
         
         # parse the explain to get the mapping between aliases used in the guidelines and the table names
         parsed_exp = explain_parser(open(exp_path,'r').read()).parse()
         self.tab_alias_dict = parsed_exp['tab_alias_dic']
+
+        # Annotate the entire guideline tree.
+        annotated_guideline = annotate_guideline(exp_res, guideline, self.tab_alias_dict)
         
         # store the plan
         self.plans[0] = Plan(
             q_id=self.q_id,
             query=self.sql,
             hintset=[],hintset_id=0,
-            explain_path=exp_path,guideline=guideline,
+            explain_path=exp_path,guideline=annotated_guideline,
             cost=plan_cost,
             tab_alias_dict=self.tab_alias_dict,
             )
@@ -383,13 +387,19 @@ class Query:
 
         # compile the plan
         exp_path,guideline,plan_cost=db2_explain(self.schema,self.sql,self.q_id,hintset=hintset,hintset_id=hintset_id,opt_plan_path=self.opt_plan_path,gen_exp_output=gen_exp_output,gen_guideline=True, return_cost=True,cmd_verbose=self.verbose, conn_str=conn_str)
-        
+    
+        # get the explain result
+        exp_res = get_card_sel(conn_str)
+
+        # Annotate the entire guideline tree.
+        annotated_guideline = annotate_guideline(exp_res, guideline, self.tab_alias_dict)
+
         # create a Plan object and assign it to the Query
         self.plans[hintset_id] = Plan(
             q_id=self.q_id,
             query=self.sql,
             hintset=hintset,hintset_id=hintset_id,
-            explain_path=exp_path,guideline=guideline,
+            explain_path=exp_path,guideline=annotated_guideline,
             cost=plan_cost,
             tab_alias_dict=self.tab_alias_dict,
             id_tab=self.id_tab

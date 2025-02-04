@@ -32,8 +32,28 @@ hintsets=[
     ['db2 .opt set disable mgjn;\n', 'db2 .opt set disable hsjn;\n','db2 .opt set disable iscan;\n'],
     ]
 
-def gen_label_plans(start, num_samples, data_slice, schema_name, encFileID, conn_str_path, input_dir='./input/', opt_plan_path='./optimizer_plans/', internal_dir='./internal/',labeled_data_dir='./labeled_data', sample_size=2000,timeout_thr=60, dynamic_timeout=False, dynamic_timeout_factor=5):
-
+def gen_label_plans(start, num_samples, data_slice=None, schema_name=None, encFileID='temp', conn_str_path='./conn_str', input_dir='./input/', opt_plan_path='./optimizer_plans/', internal_dir='./internal/',labeled_data_dir='./labeled_data', sample_size=2000,timeout_thr=60, dynamic_timeout=False, dynamic_timeout_factor=5):
+    """
+    Function to load queries from a folder, compile and label plans using different hintsets.
+    The function also collects db stats before processing the queries.
+    The function writes the labeled plans to disk.
+    
+    Args:
+    start: int, the starting index of the queries to process
+    num_samples: int, the number of queries to process
+    data_slice: slice, the slice of queries to process
+    schema_name: str, the name of the schema
+    encFileID: str, a unique id for the dataset
+    conn_str_path: str, the path to the file containing the connection string to the database
+    input_dir: str, the directory containing the queries
+    opt_plan_path: str, the path to store the optimizer plans
+    internal_dir: str, the directory to store intermediary files
+    labeled_data_dir: str, the directory to store the labeled data
+    sample_size: int, the number of samples used per table
+    timeout_thr: int, the timeout threshold to avoid long running queries/plans
+    dynamic_timeout: bool, determines whether dynamic timeout is used
+    dynamic_timeout_factor: int, the multiplier for the dynamic timeout with respect to the optimizer's plan as a baseline, used only when `dynamic_timeout = True`
+    """
     tic = time.time()
 
     with open(conn_str_path, "r") as conn_str_f:
@@ -75,13 +95,13 @@ def gen_label_plans(start, num_samples, data_slice, schema_name, encFileID, conn
     queries, query_ids = load_queries_from_folder(input_dir)
 
     # get a slice of the input queries if `start` and `num_samples` are given or if `data_slice` is given
+    max_samples = len(queries)
     if data_slice is None:
         if start is not None and num_samples is not None:
-            max_samples = len(queries)
             step = int(max_samples/num_samples)
             data_slice = slice(start,max_samples,step)
         else:
-            data_slice = slice(0,len(queries))
+            data_slice = slice(0,max_samples)
 
     queries = queries[data_slice]
     query_ids = query_ids[data_slice]
@@ -163,15 +183,15 @@ def gen_label_plans(start, num_samples, data_slice, schema_name, encFileID, conn
                     one_success = True
                 
                 except:
-                    print("Execution failed for query {}, plan {}.".format(q_id,hintset_id))
+                    print("Plan execution or encoding failed for query {}, plan {}.".format(q_id,hintset_id))
                     pass
 
             if one_success:
                 query_list.append(query)
                 query_success_id+=1
-            
+        
         except:
-            print("Encoding failed for query {}.".format(q_id))
+            print("Query encoding failed for query {}.".format(q_id))
             pass
         
         # checkpoint - write to disk every 100 query
@@ -204,20 +224,20 @@ def gen_label_plans(start, num_samples, data_slice, schema_name, encFileID, conn
 if __name__ == '__main__':
 
     gen_label_plans(
-        data_slice= None, # Specify the max number of queries to process
-        start = 1, # alternative to data_slice, gives the starting index, must be provided together with `num_samples`
-        num_samples = 500, # alternative to data_slice, gives the number of samples, must be provided together with `start`
+        data_slice = None, # alternative to `start` and `num_samples`, gives the slice of queries to process
+        start = None, # alternative to data_slice, gives the starting index, must be provided together with `num_samples`
+        num_samples = None, # alternative to data_slice, gives the number of samples, must be provided together with `start`
         schema_name = 'imdb', # schema name
-        encFileID = "ceb-13k-500-1", # a unique id for the dataset
+        encFileID = "job_enc_v2", # a unique id for the dataset
         conn_str_path = './conn_str', # path to the file containing a connection string to the database
-        input_dir = "./input/ceb-imdb-13k/", # the directory that contains query.sql file(s)
-        opt_plan_path = './job_ceb-13k-1_plans/', # the path used to store explain outputs and guidelines
+        input_dir = "./input/temp/", # the directory that contains query.sql file(s)
+        opt_plan_path = './job_plans/', # the path used to store explain outputs and guidelines
         internal_dir = './internal/', # the path to store intermediary files
         labeled_data_dir = './labeled_data/',
         sample_size = 2000, # number of samples used per table
         timeout_thr = 60, # timeout threshold to avoid long running query/plans 
         dynamic_timeout = True, # determines whether dynamic timeout is used 
-        dynamic_timeout_factor = 10 # determines the multiplier for the dynamic timeout with respect to the optimizer's plan as a baseline, used only when `dynamic_timeout = True`
+        dynamic_timeout_factor = 5 # determines the multiplier for the dynamic timeout with respect to the optimizer's plan as a baseline, used only when `dynamic_timeout = True`
         )
 
     

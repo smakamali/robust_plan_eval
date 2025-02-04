@@ -48,29 +48,36 @@ def featurizetree(root,id_tab):
 
     num_tabs = tabs.shape[0]
 
+    # capture onehot encoding for each access operator
     for node in root.iter():
         opoh = op_enc.transform(to_2d([node.tag])).toarray().reshape(-1)
 
-        if 'TABID' in node.attrib.keys():
-            taboh = tab_enc.transform(to_2d([node.attrib['TABID']])).toarray().reshape(-1)
-        elif 'TABLE' in node.attrib.keys():
-            taboh = tab_enc.transform(to_2d([node.attrib['TABLE']])).toarray().reshape(-1)
-        else:
+        tab_detected = False
+        for attrib in ['TABID','TABLE']:
+            if attrib in node.attrib.keys():
+                taboh = tab_enc.transform(to_2d([node.attrib[attrib]])).toarray().reshape(-1)
+                tab_detected = True
+                break
+
+        if not tab_detected:
             taboh = other_tab
-        node.set('onehot',np.concatenate((opoh,taboh)))
+        
+        stats=[]
+        for attrib in ['OUTPUT_CARD','SELECTIVITY','TOTAL_COST']:
+            if attrib in node.attrib.keys():
+                stats.append(float(node.attrib[attrib]))
+            else:
+                stats.append(0)
+        
+        node.set('onehot',np.concatenate((stats,opoh,taboh)))
     
     # capture underlying tables for non-access operators
     for node in root.iter():
         if 'TABID' not in node.attrib.keys() or 'TABLE' not in node.attrib.keys() :
-            childrenSum = np.concatenate(
-                (other_op,other_tab),
-                )
+            childrenSum = other_tab
             for elem in node.iter():
-                childrenSum = np.logical_or(childrenSum,np.array(elem.attrib['onehot']))
-            taboh = childrenSum[-num_tabs:]
-            node.attrib['onehot'][-num_tabs:] = taboh
-        # print(node.tag)
-        # print(node.attrib)
+                childrenSum = np.logical_or(childrenSum,np.array(elem.attrib['onehot'][-num_tabs:]))
+            node.attrib['onehot'][-num_tabs:] = childrenSum
             
     return root
 
