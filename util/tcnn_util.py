@@ -63,7 +63,7 @@ def featurizetree(root,id_tab):
             taboh = other_tab
         
         stats=[]
-        for attrib in ['OUTPUT_CARD','SELECTIVITY','TOTAL_COST']:
+        for attrib in ['TOTAL_COST','OUTPUT_CARD','SELECTIVITY']:
             if attrib in node.attrib.keys():
                 stats.append(float(node.attrib[attrib]))
             else:
