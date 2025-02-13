@@ -92,7 +92,7 @@ def describe_plot(arrays,titles,metric_label,plot_title,log_scale = True,figsize
     plot_x_every=plot_x_every,save_to=save_to,bbox_to_anchor=bbox_to_anchor,show_fig=show_fig)
 
 def plot_step_curve(arrays,titles,scale='log',title='Workload Runtime',mask=None,figsize=[10,6],
-                    save_to=None,bbox_to_anchor=None,show_fig=True):
+                    save_to=None,bbox_to_anchor=None,show_fig=True,legend=True,ncol=1):
     fig = plt.figure(figsize=figsize)
     for idx,array in enumerate(arrays):
         if mask is not None:
@@ -103,8 +103,9 @@ def plot_step_curve(arrays,titles,scale='log',title='Workload Runtime',mask=None
         plt.step(x, y + 2, label=titles[idx])
     plt.yscale(scale)
     plt.grid(axis='x', color='0.95')
-    plt.legend(bbox_to_anchor=bbox_to_anchor)
-    plt.title(title)
+    if legend:
+        plt.legend(bbox_to_anchor=bbox_to_anchor,ncol=ncol)
+    plt.title(title,fontsize=10)
     plt.xlabel('Queries')
     plt.ylabel('Runtime (s)')
     if save_to is not None:
@@ -243,8 +244,8 @@ def comparetopplansmulti(bm,bs2,p,verbose=False):
     # bm: expected exec time
     # bs2: expected variance
     N = bm.shape[0]
-    minS2 = bs2[bs2>0].min()
-    bs2[bs2<=0]=minS2
+    minS2 = bs2[bs2>=0].min()
+    bs2[bs2<0]=minS2
     if verbose:
         print("best_m",bm)
         print("best_s2",bs2)

@@ -173,9 +173,9 @@ class target_log_transform:
 
     def transform(self, data_set: Dataset) -> Dataset:
         if self.target == 'latency':
-            out = log10Transform(data_set.y)        
+            out = log10Transform(data_set.y)
         elif self.target == 'cost':
-            out = log10Transform(data_set.opt_cost) 
+            out = log10Transform(data_set.opt_cost)
         else:
             raise Exception('target must be either `latency` or `cost`')
         

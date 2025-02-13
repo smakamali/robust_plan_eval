@@ -47,3 +47,11 @@ class rmse_loss(nn.Module):
         
     def forward(self,yhat,y):
         return torch.sqrt(self.mse(yhat[:,0],y))
+    
+class bce_loss(nn.Module):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.loss = torch.nn.BCELoss()
+    
+    def forward(self,yhat,y):
+        return self.loss(yhat,y)

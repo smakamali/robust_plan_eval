@@ -63,7 +63,7 @@ def featurizetree(root,id_tab):
             taboh = other_tab
         
         stats=[]
-        for attrib in ['TOTAL_COST','OUTPUT_CARD','SELECTIVITY']:
+        for attrib in ['OUTPUT_CARD','SELECTIVITY','TOTAL_COST']:
             if attrib in node.attrib.keys():
                 stats.append(float(node.attrib[attrib]))
             else:
@@ -279,4 +279,116 @@ def prepare_trees(trees, transformer, left_child, right_child, cuda=False):
         indexes = indexes.cuda()
 
     return (flat_trees, indexes)
-                    
+
+def count_subplans(indexes):
+    """
+    Count the number of subplans that will be generated for the given plans.
+    
+    Args:
+        indexes: Tensor of shape [batch_size, max_nodes * 3, 1]
+    
+    Returns:
+        int: Total number of subplans that will be generated
+    """
+    batch_size = indexes.shape[0]
+    max_nodes = indexes.shape[1] // 3
+    reshaped_indexes = indexes.view(batch_size, max_nodes, 3)
+    
+    total_subplans = 0
+    for batch_idx in range(batch_size):
+        current_indexes = reshaped_indexes[batch_idx]
+        # Count non-zero parent indices (indicating valid nodes)
+        valid_nodes = (current_indexes[:, 0] > 0).sum().item()
+        total_subplans += valid_nodes
+        
+    return total_subplans
+
+def enumerate_subplans(flat_trees, indexes):
+    """
+    Generate encoded representations of all possible subplans from the input plans.
+    
+    Args:
+        flat_trees: Tensor of shape [batch_size, feature_dim, max_tree_length]
+        indexes: Tensor of shape [batch_size, max_nodes * 3, 1]
+    
+    Returns:
+        Tuple of:
+            - List of subplan trees, each of shape [subplan_length, feature_dim]
+            - List of subplan indexes, each of shape [subplan_length, 1]
+    """
+
+    def recurse(node_idx, current_indexes, new_tree_indexes):
+        """
+        Recursively traverse the tree to generate subplans.
+        """
+        # Get the triplet corresponding to the current node
+        triplet = current_indexes[current_indexes[:,0]==node_idx].squeeze()
+        new_tree_indexes.append(triplet)
+        # Get the children of the current node
+        left_child = triplet[1]
+        right_child = triplet[2]
+        # Recurse on the children
+        if left_child != 0:
+            recurse(left_child,current_indexes,new_tree_indexes)
+        if right_child != 0:
+            recurse(right_child,current_indexes,new_tree_indexes)
+
+    # Reshape indexes to [batch_size, max_nodes, 3]
+    batch_size = indexes.shape[0]
+    max_nodes = indexes.shape[1] // 3
+    reshaped_indexes=indexes.reshape(batch_size, max_nodes, 3)
+
+    # Initialize lists to store subplans
+    all_subplan_trees = []
+    all_subplan_indexes = []
+
+    for batch_idx in range(batch_size):
+        # Get current plan's data
+        current_tree = flat_trees[batch_idx]
+        current_indexes = reshaped_indexes[batch_idx]
+        
+        # Initialize lists to store subplans for this plan
+        batch_trees = []
+        batch_indexes = []
+
+        # Iterate over all nodes in the plan
+        for index in current_indexes:
+            node_idx = index[0]
+            
+            # Skip if the node is not valid
+            if node_idx == 0:
+                continue
+            
+            # Use the full plan if the root node is selected
+            if node_idx == 1:
+                new_tree_indexes=current_indexes.reshape(-1, 1)
+            # Otherwise, traverse the tree to generate the subplan
+            else:
+                new_tree_indexes = []
+                recurse(node_idx,current_indexes,new_tree_indexes)
+                new_tree_indexes=torch.stack(new_tree_indexes).reshape(-1, 1)
+            
+            # get unique nodes
+            unique_nodes = torch.unique(new_tree_indexes)-1
+            unique_nodes.sort()
+            
+            # create new tree with nodes in the subplan
+            new_tree = torch.zeros_like(current_tree)
+            msk = torch.zeros(current_tree.shape[1], dtype=torch.bool)
+            msk[unique_nodes] = True
+            new_tree[:,msk] = current_tree[:,msk]
+            
+            # Append the subplan to the batch
+            batch_trees.append(new_tree)
+            batch_indexes.append(new_tree_indexes.cpu().numpy())
+
+        # Combine subplans for this plan
+        batch_indexes = _pad_and_combine(batch_indexes)
+        batch_indexes = torch.Tensor(batch_indexes).int()
+        batch_trees = torch.stack(batch_trees)
+        
+        # Append subplans for this plan to the list of all subplans
+        all_subplan_trees.append(batch_trees)
+        all_subplan_indexes.append(batch_indexes)
+
+    return all_subplan_trees, all_subplan_indexes
