@@ -60,10 +60,10 @@ def gen_label_plans(start, num_samples, data_slice=None, schema_name=None, encFi
         conn_str = conn_str_f.read()
     conn_str = conn_str.strip('\n')+"CURRENTSCHEMA={};\n".format(schema_name)
 
-    rc = sp.run('. ~/sqllib/db2profile', shell = True)
-    rc = sp.run('~/db2cserv -d on', shell = True)
-    rc = sp.run('db2stop force', shell = True)
-    rc = sp.run('db2start', shell = True)
+    # rc = sp.run('. ~/sqllib/db2profile', shell = True)
+    # rc = sp.run('~/db2cserv -d on', shell = True)
+    # rc = sp.run('db2stop force', shell = True)
+    # rc = sp.run('db2start', shell = True)
 
     if not os.path.exists(opt_plan_path):
         os.mkdir(opt_plan_path)
@@ -82,11 +82,6 @@ def gen_label_plans(start, num_samples, data_slice=None, schema_name=None, encFi
         print("\n" + labeled_data_dir + " Created...\n")
 
     output_path = os.path.join(labeled_data_dir,'labeled_query_plans_{}.pickle'.format(encFileID))
-
-    # err_files_path = os.path.join(internal_dir,'error_files_{}'.format(encFileID))
-    # with open(err_files_path, 'w') as f:
-    #     f.write("Explain errors for "+ encFileID+"\n")
-    # print("\n" + err_files_path + " Created...\n")
 
     # establish connection to db
     ibm_db_conn, ibm_db_dbi_conn = connect_to_db(conn_str=conn_str)
@@ -139,21 +134,22 @@ def gen_label_plans(start, num_samples, data_slice=None, schema_name=None, encFi
             
             # encode the query
             query.encode()
+
+            # # compile the query using the default hintset
+            # _ = query.default_compile()
             
-            for hintset_id, histset in enumerate(hintsets):
+            # # This encoding is necessary to get the tab_alias_dict
+            # query.plans[0].encode()
+            
+            for hintset_id, hintset in enumerate(hintsets):
                 
                 print("compile query {} with hintset {}".format(str(idx),str(hintset_id)))
                 
                 try:
-                    # compile the query using the supplied hint set
-                    query.compile(histset,hintset_id,gen_exp_output=False)
-                    
-                    query.plans[hintset_id].encode()
-                    
                     # execute the default plan
                     if hintset_id == 0:
                         _ = query.execute(
-                            hintset=histset,
+                            hintset=hintset,
                             hintset_id=hintset_id, 
                             ibm_db_conn=ibm_db_conn,timeout_thr=timeout_thr,
                             exec_verbose = True
@@ -172,15 +168,21 @@ def gen_label_plans(start, num_samples, data_slice=None, schema_name=None, encFi
                         new_timeout_thr = timeout_thr
                     
                     # execute non-defaul plans
+                    errorMsg = ''
                     if hintset_id > 0:
-                        errorMsg = query.execute(hintset=histset,
+                        errorMsg = query.execute(hintset=hintset,
                             hintset_id=hintset_id, 
                             ibm_db_conn=ibm_db_conn,timeout_thr=new_timeout_thr,
                             exec_verbose = True
                             )
-                    
-                    guide_success_id+=1
-                    one_success = True
+                    if errorMsg == '':
+                        guide_success_id+=1
+                        one_success = True
+                        print("guideline\n",query.plans[hintset_id].guideline)
+                        print("tab_alias_dict\n",query.plans[hintset_id].tab_alias_dict)
+                        query.plans[hintset_id].encode()
+                    else:
+                        print(f"Plan compilation or execution failed for query {q_id}, plan {hintset_id}, with error message: {errorMsg}.")
                 
                 except:
                     print("Plan execution or encoding failed for query {}, plan {}.".format(q_id,hintset_id))
@@ -189,7 +191,7 @@ def gen_label_plans(start, num_samples, data_slice=None, schema_name=None, encFi
             if one_success:
                 query_list.append(query)
                 query_success_id+=1
-        
+    
         except:
             print("Query encoding failed for query {}.".format(q_id))
             pass
@@ -230,7 +232,7 @@ if __name__ == '__main__':
         schema_name = 'tpcds', # schema name
         encFileID = "dsb_temp", # a unique id for the dataset
         conn_str_path = './conn_str', # path to the file containing a connection string to the database
-        input_dir = "./input_temp/1/failed/failed_join", # the directory that contains query.sql file(s)
+        input_dir = "./input_temp/1/", # the directory that contains query.sql file(s)
         opt_plan_path = './dsb_plans/', # the path used to store explain outputs and guidelines
         internal_dir = './internal/', # the path to store intermediary files
         labeled_data_dir = './labeled_data/',

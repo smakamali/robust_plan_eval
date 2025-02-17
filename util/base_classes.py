@@ -25,7 +25,7 @@ def get_default_plan(sql,q_id,schema_name,conn_str,opt_plan_path):
     card = {}
     for idx in range(len(exp_res)):
         row = exp_res.iloc[idx]
-        if row.OPERATOR_TYPE in ['TBSCAN','IXSCAN']:
+        if row.OPERATOR_TYPE in ['TBSCAN','IXSCAN','FETCH'] and row.TABLE_NAME is not None:
             sel['.'.join([schema_name,row.TABLE_NAME])] = row.SELECTIVITY
             card['.'.join([schema_name,row.TABLE_NAME])] = row.OUTPUT_CARD
     
@@ -326,6 +326,7 @@ class Query:
             explain_path=exp_path,guideline=annotated_guideline,
             cost=plan_cost,
             tab_alias_dict=self.tab_alias_dict,
+            id_tab=self.id_tab
             )
         
     def ext_sample_info(self):
@@ -363,6 +364,12 @@ class Query:
             self.parse()
         except:
             raise(Exception("parsing faild"))
+
+        try:
+            self.ext_sample_info()
+        except:
+            raise(Exception("ext_sample_info faild"))
+        
         # only needed if the default plan does not exist
         # assumes the id for the default plan is 0
         try:
@@ -372,12 +379,9 @@ class Query:
             raise(Exception("default_compile faild"))
 
         try:
-            self.ext_sample_info()
-        except:
-            raise(Exception("ext_sample_info faild"))
-        
-        try:
-            self.node_attr, self.edge_indc, self.edge_attr, self.graph_attr = query_encoder(self.schema, self.max_tables, self.sel, self.card, self.pred_count, self.giniCoefDict, self.cardToColDict, self.correlationsDict, self.joinIncsDict, self.joinTypesDict, self.joinFactorsDict, self.tables_dict, self.jpDF, self.id_tab)
+            self.node_attr, self.edge_indc, self.edge_attr, self.graph_attr = query_encoder(
+                self.schema, self.max_tables, self.sel, self.card, self.pred_count, self.giniCoefDict, self.cardToColDict, self.correlationsDict, self.joinIncsDict, self.joinTypesDict, self.joinFactorsDict, self.tables_dict, self.jpDF, self.id_tab
+            )
         except:
             raise(Exception("query_encoder faild"))
 
@@ -387,43 +391,55 @@ class Query:
 
         # compile the plan
         exp_path,guideline,plan_cost=db2_explain(self.schema,self.sql,self.q_id,hintset=hintset,hintset_id=hintset_id,opt_plan_path=self.opt_plan_path,gen_exp_output=gen_exp_output,gen_guideline=True, return_cost=True,cmd_verbose=self.verbose, conn_str=conn_str)
-    
-        # get the explain result
-        exp_res = get_card_sel(conn_str)
 
-        # Annotate the entire guideline tree.
-        annotated_guideline = annotate_guideline(exp_res, guideline, self.tab_alias_dict)
+        # do the following only if the plan_cost is not empty
+        if plan_cost.size > 0:            
+            # get the explain result
+            exp_res = get_card_sel(conn_str)
 
-        # create a Plan object and assign it to the Query
-        self.plans[hintset_id] = Plan(
-            q_id=self.q_id,
-            query=self.sql,
-            hintset=hintset,hintset_id=hintset_id,
-            explain_path=exp_path,guideline=annotated_guideline,
-            cost=plan_cost,
-            tab_alias_dict=self.tab_alias_dict,
-            id_tab=self.id_tab
-            )
+            # Annotate the entire guideline tree.
+            annotated_guideline = annotate_guideline(exp_res, guideline, self.tab_alias_dict)
+
+            # create a Plan object and assign it to the Query
+            self.plans[hintset_id] = Plan(
+                q_id=self.q_id,
+                query=self.sql,
+                hintset=hintset,hintset_id=hintset_id,
+                explain_path=exp_path,guideline=annotated_guideline,
+                cost=plan_cost,
+                tab_alias_dict=self.tab_alias_dict,
+                id_tab=self.id_tab
+                )
+            return "compilation successful!"
+        else:
+            return "compilation failed!"
+
 
     def execute(self,hintset,hintset_id,ibm_db_conn,timeout_thr=100, exec_verbose=False):
         
+        result = "compilation failed!"
         if hintset_id not in self.plans.keys():
-            self.compile(hintset,hintset_id,False)
-
-        latency,errorMsg = db2_execute(self.sql,ibm_db_conn, self.plans[hintset_id].guideline,timeout_thr)
-    
-        self.plans[hintset_id].latency = latency
-        self.plans[hintset_id].error_msg = errorMsg
-
-        if latency >= timeout_thr:
-            self.plans[hintset_id].timed_out = True
+            result = self.compile(hintset,hintset_id,False)
         else:
-            self.plans[hintset_id].timed_out = False
-            
-        if self.verbose or exec_verbose:
-            print("query {}, plan {}, latency: {}".format(str(self.q_id),str(hintset_id),str(latency)))
+            result = "compilation successful!"
+
+        if result == "compilation successful!":
+            latency,errorMsg = db2_execute(self.sql,ibm_db_conn, self.plans[hintset_id].guideline,timeout_thr)
         
-        return errorMsg
+            self.plans[hintset_id].latency = latency
+            self.plans[hintset_id].error_msg = errorMsg
+
+            if latency >= timeout_thr:
+                self.plans[hintset_id].timed_out = True
+            else:
+                self.plans[hintset_id].timed_out = False
+                
+            if self.verbose or exec_verbose:
+                print("query {}, plan {}, latency: {}".format(str(self.q_id),str(hintset_id),str(latency)))
+            
+            return errorMsg
+        else:
+            return result
     
     def print(self):
         attributes = vars(self)
@@ -452,12 +468,13 @@ def binarize_xml_tree(root):
             # If the current element has more than one child, recursively call the function
             binarize_xml_tree(elem)
 
-def gltemplatetotree(string,tab_alias_dict):
+def gltemplatetotree(string,id_tab):
     gl = find_between(string,'<OPTGUIDELINES>','</OPTGUIDELINES>')
     root = ET.fromstring(gl)
     #binarize the xml tree before featurization
     binarize_xml_tree(root)
-    featurizetree(root,tab_alias_dict)
+    print("============>",id_tab)
+    featurizetree(root,id_tab)
     tree = xmltotree(root)
     return tree
 

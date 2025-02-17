@@ -76,7 +76,7 @@ def load_db_schema(schema_name, conn_str):
     for table in table_list:
         sql = "Select trim(c.tabschema) || '.' || trim(c.tabname) || '.' || trim(c.colname) as column_name from syscat.columns c inner join syscat.tables t on t.tabschema = c.tabschema and t.tabname = c.tabname where t.type = 'T' and c.tabschema = \'" + table.split('.')[0] + "\' and c.tabname = \'" + table.split('.')[1] + "\';"
         columns = pd.read_sql(sql,ibm_db_dbi_conn).values.flatten().tolist()
-        table_dict[table] = columns
+        table_dict[str(table)] = columns
     _ = close_connection_to_db(ibm_db_conn, verbose = True)
     return table_dict
 
@@ -294,7 +294,7 @@ def get_card_sel(conn_str):
         ON ESI.TARGET_ID = EO.OPERATOR_ID
     LEFT JOIN SYSTOOLS.EXPLAIN_STREAM ESO 
         ON ESO.SOURCE_ID = EO.OPERATOR_ID
-    WHERE EO.OPERATOR_TYPE IN ('TBSCAN', 'HSJOIN', 'NLJOIN', 'MSJOIN', 'GRPBY')
+    WHERE EO.OPERATOR_TYPE IN ('TBSCAN', 'HSJOIN', 'NLJOIN', 'MSJOIN', 'GRPBY', 'FETCH')
     GROUP BY EO.OPERATOR_ID,
             EO.OPERATOR_TYPE,
             EO.TOTAL_COST
@@ -348,7 +348,6 @@ def get_card_sel(conn_str):
 def annotate_guideline(exp_res: pd.DataFrame, guideline: str, tab_alias_dict: dict) -> str:
     # Convert the dataframe to a list of dictionaries sorted by OPERATOR_ID.
     rows = exp_res.sort_values("OPERATOR_ID").to_dict(orient="records")
-    
     def get_matching_row(tag: str, node_attrs: dict):
         """
         Find and remove the first row in 'rows' matching the given tag.
@@ -356,13 +355,15 @@ def annotate_guideline(exp_res: pd.DataFrame, guideline: str, tab_alias_dict: di
         enforce a TABLE_NAME match; for all other operators (even if they have a TABID),
         match solely on operator type.
         """
+        tag = "FETCH" if tag == "LPREFETCH" else tag
+
         for i, row in enumerate(rows):
             # Check if the operator type matches.
             if row["OPERATOR_TYPE"].strip() != tag.strip():
                 continue
 
             # Only enforce table name matching for TBSCAN and IXSCAN.
-            if tag in {"TBSCAN", "IXSCAN"} and "TABID" in node_attrs:
+            if tag in {"TBSCAN", "IXSCAN", "LPREFETCH"} and "TABID" in node_attrs:
                 alias = node_attrs["TABID"]
                 expected_table = tab_alias_dict.get(alias)
                 # If the alias is found in the dictionary, then require a match.
@@ -391,7 +392,12 @@ def annotate_guideline(exp_res: pd.DataFrame, guideline: str, tab_alias_dict: di
             node.set("OUTPUT_CARD", str(matching_row["OUTPUT_CARD"]))
             node.set("SELECTIVITY", str(matching_row["SELECTIVITY"]))
             node.set("TOTAL_COST", str(matching_row["TOTAL_COST"]))
-        # Otherwise, we leave the node unannotated (or optionally, log a warning).
+        elif tag != "OPTGUIDELINES":
+            node.set("OUTPUT_CARD", "0")
+            node.set("SELECTIVITY", "0")
+            node.set("TOTAL_COST", "0")
+        else:
+            pass
         
         # Recursively annotate child nodes.
         for child in node:
@@ -403,4 +409,5 @@ def annotate_guideline(exp_res: pd.DataFrame, guideline: str, tab_alias_dict: di
     
     # Return the annotated XML as a unicode string.
     annotated_xml = ET.tostring(root, encoding="unicode")
+    print("guideline:\n",annotated_xml)
     return annotated_xml

@@ -15,15 +15,6 @@ def delete_node(node, node_to_remove):
 def remove_node(tree,node_to_remove):
     return tree.transform(delete_node,node_to_remove=node_to_remove)
 
-# def node_is_id(node):
-#     if isinstance(node,exp.Identifier):
-#         print((repr(node)))
-#         node.this = node.this.upper()
-#     return node
-
-# def tree_upper(tree):
-#     return tree.transform(node_is_id)
-
 def upper(input):
     if isinstance(input,dict):
         output = {}
@@ -51,13 +42,27 @@ def split_col_list(input):
         res.append(str(input))
     return res
 
-def local_pred_to_upper(input):
-    input.this
-    print(repr(input))
-    return input
+def extract_pred_parts(pred):
+    """
+    Extract parts from a predicate node and return them as a list.
+    """
+    parts = []
+    if isinstance(pred, exp.Predicate):
+        parts.append(pred.this)
+        parts.append(pred.expression)
+        parts.append(pred.key)
+    else:
+        if hasattr(pred, 'this') and hasattr(pred, 'expression') and hasattr(pred, 'key'):
+            parts.append(pred.this)
+            parts.append(pred.expression)
+            parts.append(pred.key)
+    return parts
+
 
 def parse_query(sql,verbose=False):
-    supported_ops = (exp.Predicate,exp.Unary,exp.Or)
+    """
+    Parse a SQL query and return a dictionary of alias to tables, a list of joins predicates, a list of local predicates, and a list of all columns used in all predicates."""
+    supported_ops = (exp.Predicate)
 
     ast = parse_one(sql)
     root = build_scope(ast)
@@ -87,35 +92,39 @@ def parse_query(sql,verbose=False):
         else:
             tb_id = str(table.args['this'])
         tables_dict[tb_id]=tb_name
-
-    print("-----------------------------")
+       
     join_preds = []
     local_preds = []
     pred_cols = []
 
     for join in ast.find_all(exp.Join):
-        for pred in join.find_all(supported_ops):
-            join_preds.append([pred.this,pred.expression,pred.key])
-            for col in pred.find_all(exp.Column):
-                pred_cols.append(col)
+        on_expr = join.args.get("on")
+        if on_expr is not None:
+            for pred in join.find_all(supported_ops):
+                extracted = extract_pred_parts(pred)
+                join_preds.append(extracted)
+                for col in pred.find_all(exp.Column):
+                    pred_cols.append(col)
 
     wh = ast.find(exp.Where)
     if verbose:
         print("Original Where",str(wh))
-    while wh.find(supported_ops):
-        pred = wh.find(supported_ops)
-        if pred.find(exp.Literal,exp.Null):
-            # pred=tree_upper(pred)
-            local_preds.append(str(pred))
-        else:
-            join_preds.append([pred.this,pred.expression,pred.key])
+    if wh is not None:
+        while wh.find(supported_ops):
+            pred = wh.find(supported_ops)
+            if pred.find(exp.Literal,exp.Null):
+                # pred=tree_upper(pred)
+                local_preds.append(str(pred))
+            else:
+                extracted = extract_pred_parts(pred)
+                join_preds.append(extracted)
 
-        for col in pred.find_all(exp.Column):
-            pred_cols.append(col)
-        wh = remove_node(wh,pred)
-        if verbose:
-            print("------- > Removing", str(pred))
-            print("Updated Where",str(wh))
+            for col in pred.find_all(exp.Column):
+                pred_cols.append(col)
+            wh = remove_node(wh,pred)
+            if verbose:
+                print("------- > Removing", str(pred))
+                print("Updated Where",str(wh))
     
     # get unique predicate columns
     pred_cols=list(dict.fromkeys(pred_cols))
@@ -123,27 +132,3 @@ def parse_query(sql,verbose=False):
     join_preds = split_col_list(join_preds)
 
     return upper(tables_dict),upper(join_preds),(local_preds),upper(pred_cols)
-
-############ THE FOLLOWING LINES FOR TESTING ##############
-# sql = """SELECT MIN(mc.note) AS production_note,
-#        MIN(t.title) AS movie_title,
-#        MIN(t.production_year) AS movie_year
-# FROM company_type AS ct
-#     INNER JOIN movie_companies AS mc
-#     ON ct.id = mc.company_type_id,
-#      info_type AS it,
-#      movie_info_idx AS mi_idx,
-#      title AS t
-# WHERE ct.kind = 'production companies'
-#   AND it.info = 'top 250 rank'
-#   AND mc.note NOT LIKE '%(as Metro-Goldwyn-Mayer Pictures)%'
-#   AND (mc.note LIKE '%(co-production)%'
-#        OR mc.note LIKE '%(presents)%')
-#   AND t.id = mc.movie_id
-#   AND t.id = mi_idx.movie_id
-#   AND mc.movie_id = mi_idx.movie_id
-#   AND it.id = mi_idx.info_type_id;"""
-# parse_query(sql,verbose=True)
-
-
-# print(upper([['sdsA','sadf'],['gdfg','rwer',['erwe']]]))
