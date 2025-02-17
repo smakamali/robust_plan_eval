@@ -1,0 +1,26 @@
+numpy
+pandas
+ibm-db
+matplotlib
+scikit-learn
+scipy
+sqlglot
+ipython
+torch
+torchvision
+torchaudio
+tensorboard
+pytorch-lightning
+torchmetrics
+ipykernel
+
+torch-geometric
+# Optional dependencies:
+pyg-lib
+torch-scatter
+torch-sparse
+torch-cluster
+torch-spline-conv
+-f https://data.pyg.org/whl/torch-2.2.0+cu121.html  # Indicate external link for optional packages
+
+ray[data,train,tune,serve]
