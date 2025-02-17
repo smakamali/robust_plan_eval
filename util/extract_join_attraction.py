@@ -21,6 +21,7 @@ def complete_col(item,schema_name):
     if len(item) == 2: # if schema is NOT specified
         return [schema_name]+item
     if len(item) == 1:
+        print("item",item)
         raise Exception("Column qualifier must include a Table name.")
 
 def replace_alias(col,tables_dict):
@@ -35,6 +36,10 @@ def enrich_col(col):
 def get_query_join_preds(schema_name,sql,verbose=False):
 
     tables_dict,join_preds,local_preds,pred_cols=parse_query(sql)
+    print("tables_dict",tables_dict)
+    print("join_preds",join_preds)
+    print("local_preds",local_preds)
+    print("pred_cols",pred_cols)
     
     schema_name=schema_name.upper()
 
@@ -95,14 +100,18 @@ def get_all_join_attr(
 
     all_joins = []
     for idx,sql in enumerate(queries):
-        try:
-            print("Parsing query {}".format(query_ids[idx]))
-            _,joins_preds,_,_=get_query_join_preds(schema_name,sql,verbose=True)
-            all_joins.extend(joins_preds)
-        except:
-            print("Warning: Parsing query {} failed!".format(query_ids[idx]))
-            pass
-
+        # try:
+        print(">>>>>>>> Parsing query {}".format(query_ids[idx]))
+        _,joins_preds,_,_=get_query_join_preds(schema_name,sql,verbose=True)
+        all_joins.extend(joins_preds)
+        # except:
+        #     print("Warning: Parsing query {} failed!".format(query_ids[idx]))
+        #     pass
+        
+        print("Press enter to continue...")
+        input()
+        
+    print("all_joins",all_joins)
     all_joins=np.array(all_joins)
     # all_joins=np.unique(all_joins,axis=0)
     # print("all_joins",all_joins)

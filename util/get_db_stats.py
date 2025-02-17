@@ -45,7 +45,10 @@ def get_db_stats(
     chai2matrixDict = {}
     for table in tables:
         print("computing chi2matrix for table: ",table)
-        _,chai2matrix = get_chi2_matrix(bucketize_df(table_datas[table])) 
+        if table_datas[table].shape[0] > 1:
+            _,chai2matrix = get_chi2_matrix(bucketize_df(table_datas[table]))
+        else:
+            _,chai2matrix = None, None
         chai2matrixDict[table] = chai2matrix
         
     # the db stats are stored to disk

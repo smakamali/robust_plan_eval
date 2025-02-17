@@ -227,11 +227,11 @@ if __name__ == '__main__':
         data_slice = None, # alternative to `start` and `num_samples`, gives the slice of queries to process
         start = None, # alternative to data_slice, gives the starting index, must be provided together with `num_samples`
         num_samples = None, # alternative to data_slice, gives the number of samples, must be provided together with `start`
-        schema_name = 'imdb', # schema name
-        encFileID = "job_enc_v2", # a unique id for the dataset
+        schema_name = 'tpcds', # schema name
+        encFileID = "dsb_temp", # a unique id for the dataset
         conn_str_path = './conn_str', # path to the file containing a connection string to the database
-        input_dir = "./input/temp/", # the directory that contains query.sql file(s)
-        opt_plan_path = './job_plans/', # the path used to store explain outputs and guidelines
+        input_dir = "./input_temp/1/failed/failed_join", # the directory that contains query.sql file(s)
+        opt_plan_path = './dsb_plans/', # the path used to store explain outputs and guidelines
         internal_dir = './internal/', # the path to store intermediary files
         labeled_data_dir = './labeled_data/',
         sample_size = 2000, # number of samples used per table

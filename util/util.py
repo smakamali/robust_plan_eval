@@ -68,7 +68,7 @@ def recurse_subfolders(input_dir,query_ids,queries):
 
 def load_queries_from_file(input_dir,filename):
     
-    query_ids = [filename.split('.')[0][:7]]
+    query_ids = [filename.split('.')[0]]
     queries = []
     
     with open(os.path.join(input_dir, filename)) as f:
@@ -82,7 +82,7 @@ def load_queries_from_file(input_dir,filename):
         
         file_content=''.join(file_content)
         
-        queries.extend(['SELECT '+query.strip(';')+';' for query in re.split('SELECT |select ',file_content)[1:]])
+        queries.extend(['SELECT '+query.strip(';')+';' for query in re.split('SELECT|select',file_content)[1:]])
     
     if len(query_ids) != len(queries):
         query_ids = ['q{}'.format(i) for i in range(len(queries))]
