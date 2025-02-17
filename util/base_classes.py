@@ -473,7 +473,6 @@ def gltemplatetotree(string,id_tab):
     root = ET.fromstring(gl)
     #binarize the xml tree before featurization
     binarize_xml_tree(root)
-    print("============>",id_tab)
     featurizetree(root,id_tab)
     tree = xmltotree(root)
     return tree
