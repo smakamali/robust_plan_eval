@@ -322,8 +322,10 @@ class Query:
         self.plans[0] = Plan(
             q_id=self.q_id,
             query=self.sql,
-            hintset=[],hintset_id=0,
-            explain_path=exp_path,guideline=annotated_guideline,
+            hintset=[],
+            hintset_id=0,
+            explain_path=exp_path,
+            guideline=annotated_guideline,
             cost=plan_cost,
             tab_alias_dict=self.tab_alias_dict,
             id_tab=self.id_tab
@@ -404,8 +406,10 @@ class Query:
             self.plans[hintset_id] = Plan(
                 q_id=self.q_id,
                 query=self.sql,
-                hintset=hintset,hintset_id=hintset_id,
-                explain_path=exp_path,guideline=annotated_guideline,
+                hintset=hintset,
+                hintset_id=hintset_id,
+                explain_path=exp_path,
+                guideline=annotated_guideline,
                 cost=plan_cost,
                 tab_alias_dict=self.tab_alias_dict,
                 id_tab=self.id_tab

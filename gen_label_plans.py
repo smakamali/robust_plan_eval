@@ -60,10 +60,10 @@ def gen_label_plans(start, num_samples, data_slice=None, schema_name=None, encFi
         conn_str = conn_str_f.read()
     conn_str = conn_str.strip('\n')+"CURRENTSCHEMA={};\n".format(schema_name)
 
-    # rc = sp.run('. ~/sqllib/db2profile', shell = True)
-    # rc = sp.run('~/db2cserv -d on', shell = True)
-    # rc = sp.run('db2stop force', shell = True)
-    # rc = sp.run('db2start', shell = True)
+    rc = sp.run('. ~/sqllib/db2profile', shell = True)
+    rc = sp.run('~/db2cserv -d on', shell = True)
+    rc = sp.run('db2stop force', shell = True)
+    rc = sp.run('db2start', shell = True)
 
     if not os.path.exists(opt_plan_path):
         os.mkdir(opt_plan_path)
@@ -134,12 +134,6 @@ def gen_label_plans(start, num_samples, data_slice=None, schema_name=None, encFi
             
             # encode the query
             query.encode()
-
-            # # compile the query using the default hintset
-            # _ = query.default_compile()
-            
-            # # This encoding is necessary to get the tab_alias_dict
-            # query.plans[0].encode()
             
             for hintset_id, hintset in enumerate(hintsets):
                 
@@ -172,7 +166,8 @@ def gen_label_plans(start, num_samples, data_slice=None, schema_name=None, encFi
                     if hintset_id > 0:
                         errorMsg = query.execute(hintset=hintset,
                             hintset_id=hintset_id, 
-                            ibm_db_conn=ibm_db_conn,timeout_thr=new_timeout_thr,
+                            ibm_db_conn=ibm_db_conn,
+                            timeout_thr=new_timeout_thr,
                             exec_verbose = True
                             )
                     if errorMsg == '':
@@ -230,10 +225,10 @@ if __name__ == '__main__':
         start = None, # alternative to data_slice, gives the starting index, must be provided together with `num_samples`
         num_samples = None, # alternative to data_slice, gives the number of samples, must be provided together with `start`
         schema_name = 'tpcds', # schema name
-        encFileID = "dsb_temp", # a unique id for the dataset
+        encFileID = "dsb_1000", # a unique id for the dataset
         conn_str_path = './conn_str', # path to the file containing a connection string to the database
-        input_dir = "./input_temp/1/", # the directory that contains query.sql file(s)
-        opt_plan_path = './dsb_plans/', # the path used to store explain outputs and guidelines
+        input_dir = "./input/1/", # the directory that contains query.sql file(s)
+        opt_plan_path = './dsb_1000_plans/', # the path used to store explain outputs and guidelines
         internal_dir = './internal/', # the path to store intermediary files
         labeled_data_dir = './labeled_data/',
         sample_size = 2000, # number of samples used per table
