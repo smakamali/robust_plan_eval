@@ -224,14 +224,14 @@ class LeroModel(pl.LightningModule):
         
         # Initialize the LeroNet: LeroNet takes two additional feature for cardinality and selectivity
         self.node_dim = 2
-        self.lero_net = LeroNet(numPlanFeat[0]+self.node_dim, device)
+        self.lero_net = LeroNet(numPlanFeat[0]+self.node_dim-3, device)
     
     def forward(self, batch):
         x, edge_index, edge_attr, graph_attr = batch.x_s, batch.edge_index_s,batch.edge_attr_s, batch.graph_attr
         batch_index = batch.x_s_batch
         plan_attr, plan_ord = batch.plan_attr, batch.plan_ord
         edge_index = edge_index.long()
-        plan_attr = plan_attr.reshape(-1, self.numPlanFeat[0], self.numPlanFeat[1]).float()
+        plan_attr = plan_attr.reshape(-1, self.numPlanFeat[0], self.numPlanFeat[1]).float()[:,3:,:] # batch_size x plan_node_dim-3 x num_plan_nodes
         plan_ord = plan_ord.reshape(-1, self.numPlanOrdFeat[0], self.numPlanOrdFeat[1]).long()
         graph_attr = graph_attr.reshape(-1,self.numQueryGraphFeat)
         batch_size = batch.y.shape[0]

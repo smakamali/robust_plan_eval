@@ -307,14 +307,14 @@ if __name__ == '__main__':
     # freeze_support()
 
     train(
-        experiment_id = 'job_enc_v2_temp',
+        experiment_id = 'job_main_balsa_temp',
         architecture_p = 'balsa',
-        files_id='job_enc_v2',
-        proc_files_id='job_enc_v2_temp',
-        benchmark_files_id ='job_enc_v2',
-        labeled_data_dir='./labeled_data',
-        max_epochs = 1000,
-        patience = 20,
+        files_id='job_v2.1',
+        proc_files_id='job_v2.1',
+        benchmark_files_id ='job_v2.1',
+        labeled_data_dir='./labeled_data/job/',
+        max_epochs = 5,
+        patience = 2,
         num_experiments = 1,
         num_workers = 4,
         seed = 0,

@@ -45,6 +45,7 @@ def kfold_cv(
         labeled_data_dir=labeled_data_dir,
         force_reload=reload_data,
         seed = seed,
+        num_samples = None
         )
     print("{} queries and {} samples in training dataset: ".format(np.unique(np.array(full_dataset.query_id)).shape[0],full_dataset.len()))
 
@@ -261,7 +262,7 @@ def kfold_cv(
                     if pretrain == True:
                         pt_es = pl.callbacks.EarlyStopping(monitor='val_loss',patience=3, verbose=True)
                         pretrainer = pl.Trainer(
-                            max_epochs=10,accelerator='gpu',
+                            max_epochs=1,accelerator='gpu',
                             devices=1,
                             callbacks = [pt_es,checkpointing],
                             logger=logger,
@@ -504,9 +505,9 @@ if __name__ == '__main__':
     # from multiprocessing import freeze_support
     # freeze_support()
     kfold_cv(
-        experiment_id = 'job_main_5m03ex10kf_s1',
-        files_id = 'job_enc_v2',
-        labeled_data_dir = './labeled_data/',
+        experiment_id = 'job_main_3ex10kf_s1',
+        files_id = 'job_v2.1',
+        labeled_data_dir = './labeled_data/job/',
         max_epochs = 1000,
         patience = 50,
         num_workers = 4,
@@ -514,5 +515,5 @@ if __name__ == '__main__':
         reload_data = True,
         target = 'latency',
         n_splits = 10,
-        num_experiments = 1,
+        num_experiments = 3,
         )

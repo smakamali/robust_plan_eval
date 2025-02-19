@@ -41,7 +41,7 @@ class queryPlanPGDataset(InMemoryDataset):
             raise ValueError(f"Split '{split}' found, but expected either "
                              f"'train', 'val', or 'test'")
 
-        self.data, self.slices = torch.load(path)
+        self.data, self.slices = torch.load(path, weights_only=False)
             
     @property
     def raw_file_names(self):
@@ -225,7 +225,7 @@ class queryPlanPGDataset_nosplit(InMemoryDataset):
         super().__init__(root, transform, pre_transform, pre_filter,force_reload=force_reload)
 
         path = self.processed_paths[0]
-        self.data, self.slices = torch.load(path)
+        self.data, self.slices = torch.load(path, weights_only=False)
             
     @property
     def raw_file_names(self):
@@ -243,12 +243,10 @@ class queryPlanPGDataset_nosplit(InMemoryDataset):
         with open(self.raw_file_names[0],'rb') as f:
             queries_list = pickle.load(f)
         
-        indices = [i for i in range(len(queries_list))]
-        
         if self.num_samples is not None:
             np.random.seed(self.seed)
-            sample = np.random.choice(indices, size = self.num_samples, replace = False)
-            queries_list=queries_list[sample]
+            queries_list = np.random.choice(queries_list, size = self.num_samples, replace = False)
+            print("sampling {} queries",len(queries_list))
         fin_samples = len(queries_list)
 
         # this loop prepares the plan trees
@@ -382,7 +380,7 @@ class queryPlanPGDataset_withbenchmark(InMemoryDataset):
             raise ValueError(f"Split '{split}' found, but expected either "
                              f"'train', 'val', 'test' or 'benchmark'")
 
-        self.data, self.slices = torch.load(path)
+        self.data, self.slices = torch.load(path, weights_only=False)
             
     @property
     def raw_file_names(self):

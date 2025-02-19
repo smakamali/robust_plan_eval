@@ -37,6 +37,6 @@ def sampleData(schema_name, SAMPLE_SIZE):
 
 if __name__ == '__main__':
     sampleData(
-        schema_name = "tpcds", # schema name
+        schema_name = "imdb", # schema name
         SAMPLE_SIZE = 2000 # max number of rows to be sampled from each table
         )

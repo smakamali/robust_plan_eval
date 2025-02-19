@@ -60,10 +60,10 @@ def gen_label_plans(start, num_samples, data_slice=None, schema_name=None, encFi
         conn_str = conn_str_f.read()
     conn_str = conn_str.strip('\n')+"CURRENTSCHEMA={};\n".format(schema_name)
 
-    rc = sp.run('. ~/sqllib/db2profile', shell = True)
-    rc = sp.run('~/db2cserv -d on', shell = True)
-    rc = sp.run('db2stop force', shell = True)
-    rc = sp.run('db2start', shell = True)
+    # rc = sp.run('. ~/sqllib/db2profile', shell = True)
+    # rc = sp.run('~/db2cserv -d on', shell = True)
+    # rc = sp.run('db2stop force', shell = True)
+    # rc = sp.run('db2start', shell = True)
 
     if not os.path.exists(opt_plan_path):
         os.mkdir(opt_plan_path)
@@ -126,6 +126,8 @@ def gen_label_plans(start, num_samples, data_slice=None, schema_name=None, encFi
     query_list=[]
     for idx,sql in enumerate(queries):
         one_success = False
+        
+        # this block processes a single query and skips the query if its parsing and encoding fails
         try:
             q_id = query_ids[idx]
             
@@ -139,6 +141,7 @@ def gen_label_plans(start, num_samples, data_slice=None, schema_name=None, encFi
                 
                 print("compile query {} with hintset {}".format(str(idx),str(hintset_id)))
                 
+                # this block processes a single hintset and skips the hintset if its compilation, execution, or encoding fail
                 try:
                     # execute the default plan
                     if hintset_id == 0:
@@ -173,14 +176,14 @@ def gen_label_plans(start, num_samples, data_slice=None, schema_name=None, encFi
                     if errorMsg == '':
                         guide_success_id+=1
                         one_success = True
-                        print("guideline\n",query.plans[hintset_id].guideline)
-                        print("tab_alias_dict\n",query.plans[hintset_id].tab_alias_dict)
+                        
                         query.plans[hintset_id].encode()
+
                     else:
                         print(f"Plan compilation or execution failed for query {q_id}, plan {hintset_id}, with error message: {errorMsg}.")
-                
+                    
                 except:
-                    print("Plan execution or encoding failed for query {}, plan {}.".format(q_id,hintset_id))
+                    print("Plan compilation, execution, or encoding failed for query {}, plan {}.".format(q_id,hintset_id))
                     pass
 
             if one_success:
@@ -224,17 +227,17 @@ if __name__ == '__main__':
         data_slice = None, # alternative to `start` and `num_samples`, gives the slice of queries to process
         start = None, # alternative to data_slice, gives the starting index, must be provided together with `num_samples`
         num_samples = None, # alternative to data_slice, gives the number of samples, must be provided together with `start`
-        schema_name = 'tpcds', # schema name
-        encFileID = "dsb_1000", # a unique id for the dataset
+        schema_name = 'imdb', # schema name
+        encFileID = "job_v2.1", # a unique id for the dataset
         conn_str_path = './conn_str', # path to the file containing a connection string to the database
-        input_dir = "./input/1/", # the directory that contains query.sql file(s)
-        opt_plan_path = './dsb_1000_plans/', # the path used to store explain outputs and guidelines
+        input_dir = "./input/job/", # the directory that contains query.sql file(s)
+        opt_plan_path = './job_plans/', # the path used to store explain outputs and guidelines
         internal_dir = './internal/', # the path to store intermediary files
         labeled_data_dir = './labeled_data/',
         sample_size = 2000, # number of samples used per table
-        timeout_thr = 60, # timeout threshold to avoid long running query/plans 
+        timeout_thr = 120, # timeout threshold to avoid long running query/plans 
         dynamic_timeout = True, # determines whether dynamic timeout is used 
-        dynamic_timeout_factor = 5 # determines the multiplier for the dynamic timeout with respect to the optimizer's plan as a baseline, used only when `dynamic_timeout = True`
+        dynamic_timeout_factor = 10 # determines the multiplier for the dynamic timeout with respect to the optimizer's plan as a baseline, used only when `dynamic_timeout = True`
         )
 
     

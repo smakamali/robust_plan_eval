@@ -153,6 +153,18 @@ class balsa_simulation(pl.LightningModule):
     
     def process_plan_features(self, batch, qp_out_batch):
         
+        """
+        Process the plan features for training.
+
+        Args:
+        - batch: the batched data with plan attributes and orders
+        - qp_out_batch: the output of the query module for each plan in the batch
+
+        Returns:
+        - plan_attributes: the processed plan attributes, which are the concatenation of the original plan attributes and the output of the query module
+        - plan_indexes: the processed plan indexes, which are the indexes of the subplan nodes derived from the original plan
+        - plan_costs: the processed plan costs, which are the maximum of the plan node costs (C_out) for each subplan in the batch
+        """
         plan_attr, plan_ord = batch.plan_attr, batch.plan_ord
         
         plan_attr = plan_attr.reshape(-1, self.numPlanFeat[0], self.numPlanFeat[1]).float() # B x numPlanFeat[0] x numPlanFeat[1] => B x plan_node_dim x num_plan_nodes
@@ -163,9 +175,11 @@ class balsa_simulation(pl.LightningModule):
         plan_indexes = []
         plan_costs = []
         for i in range(self.batch_size):
-            subplan_attr = subplan_trees[i]
+            subplan_attr = subplan_trees[i] # num_subplans, feature_dim, num_plan_nodes
             subplan_ord = subplan_indexes[i]
-            subplan_cost = subplan_attr[:,2].max(dim=-1)[0] # num_subplans
+
+            subplan_cost = subplan_attr[:,0,:].sum(dim=-1) # num_subplans x num_plan_nodes
+            subplan_attr = subplan_attr[:,3:,:] # num_subplans x feature_dim-1 x num_plan_nodes
             qp_out = qp_out_batch[i,:].unsqueeze(0).unsqueeze(-1) # 1 x query_module_out x 1
             qp_out = torch.repeat_interleave(qp_out,subplan_attr.shape[0],dim=0) # num_subplans x query_module_out x 1
             qp_out = torch.repeat_interleave(qp_out,subplan_attr.shape[2],dim=2) # num_subplans x query_module_out x num_plan_nodes 
@@ -304,7 +318,7 @@ class balsa_model(pl.LightningModule):
             )
     
     def build_tcnn(self):
-        self.tcnn_in_channels = self.numPlanFeat[0] + self.query_module_out
+        self.tcnn_in_channels = self.numPlanFeat[0] + self.query_module_out -3 # plan node features + query module (excluding cost from the plan features)
         
         # TCNN module from Neo and Bao
         self.guidelineTCNNLayers = []
@@ -364,7 +378,7 @@ class balsa_model(pl.LightningModule):
         batch_index = batch.x_s_batch
         plan_attr, plan_ord = batch.plan_attr, batch.plan_ord
         edge_index = edge_index.long()
-        plan_attr = plan_attr.reshape(-1, self.numPlanFeat[0], self.numPlanFeat[1]).float()
+        plan_attr = plan_attr.reshape(-1, self.numPlanFeat[0], self.numPlanFeat[1]).float()[:,3:,:] # batch_size x plan_node_dim x num_plan_nodes
         plan_ord = plan_ord.reshape(-1, self.numPlanOrdFeat[0], self.numPlanOrdFeat[1]).long()
         graph_attr = graph_attr.reshape(-1,self.numQueryGraphFeat)
         batch_size = batch.y.shape[0]
@@ -381,8 +395,8 @@ class balsa_model(pl.LightningModule):
 
         # flatten the whole graph into a one-dimensional vector
         qp_out = self.queryMLP(mlpin) # B x query_module_out
-        qp_out = torch.unsqueeze(qp_out,dim=2)
-        qp_out = torch.repeat_interleave(qp_out,self.numPlanFeat[1],dim=2) # B x 
+        qp_out = torch.unsqueeze(qp_out,dim=2) # B x query_module_out x 1
+        qp_out = torch.repeat_interleave(qp_out,plan_attr.shape[2],dim=2) # B x query_module_out x num_plan_nodes
         plan_attr = torch.concat((plan_attr,qp_out),dim=1)
         tcnn_in = (plan_attr, plan_ord)
         tcnn_out = self.guidelineTCNN(tcnn_in)

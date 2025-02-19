@@ -57,7 +57,7 @@ def ext_sample_info(schema_name,encFileID,tables_dict,query_joins,local_preds,pr
         table = '.'.join([schema_name,tables_dict[table]])
         # Read csv files with "\" as escapechar and """ as quotechar. 
         tab_path = os.path.join(samples_dir,'{}_sample.csv'.format(table))
-        table_datas[table] = pd.read_csv(tab_path, escapechar="\\", index_col=False, header=0)
+        table_datas[table] = pd.read_csv(tab_path, index_col=False, header=0)
 
     # create a dataframe containing query join preds
     jc_list = np.array(query_joins)[:,[2,5,6]]
@@ -91,6 +91,8 @@ def ext_sample_info(schema_name,encFileID,tables_dict,query_joins,local_preds,pr
         else:
             colCombs = list(combinations_of_2(tabCols))
             for comb in colCombs:
+                print("tab",tab,"comb",comb)
+                print("chai2matrixDict[tab]",chai2matrixDict[tab])
                 correlationsDict[tab][str(comb[0])+'-'+str(comb[1])] = chai2matrixDict[tab].loc[comb[0],comb[1]]
 
     # capture number of predicates per table

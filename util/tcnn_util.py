@@ -308,13 +308,12 @@ def enumerate_subplans(flat_trees, indexes):
     Generate encoded representations of all possible subplans from the input plans.
     
     Args:
-        flat_trees: Tensor of shape [batch_size, feature_dim, max_tree_length]
+        flat_trees: Tensor of shape [batch_size, feature_dim, num_plan_nodes]
         indexes: Tensor of shape [batch_size, max_nodes * 3, 1]
     
     Returns:
-        Tuple of:
-            - List of subplan trees, each of shape [subplan_length, feature_dim]
-            - List of subplan indexes, each of shape [subplan_length, 1]
+        all_subplan_trees (list): List of `batch_size` Tensors of shape [num_subplans, feature_dim, num_plan_nodes]
+        all_subplan_indexes (list): List of `batch_size` Tensors of shape [num_subplans, max_nodes * 3, 1]
     """
 
     def recurse(node_idx, current_indexes, new_tree_indexes):
