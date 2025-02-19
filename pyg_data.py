@@ -509,6 +509,11 @@ class queryPlanPGDataset_withbenchmark(InMemoryDataset):
         query_ids_unique = np.array(query_ids_unique)  # non-benchmark query ids
         np.random.seed(self.seed)  # Set the random seed
 
+        # transform ratio sample sizes to numbers
+        if self.test_samples < 1:
+            self.test_samples = int(self.test_samples*query_ids_unique.shape[0])
+        if self.val_samples < 1:
+            self.val_samples = int(self.val_samples*query_ids_unique.shape[0])
 
         # Separate query IDs and latencies into two lists
         opt_plan_q_ids, opt_plan_latencies = zip(*[
@@ -533,7 +538,9 @@ class queryPlanPGDataset_withbenchmark(InMemoryDataset):
 
 
         # Remaining test set size
-        remaining_test_samples = int(len(query_ids_unique) * self.test_samples) - len(test_long_run_qids)
+        remaining_test_samples = self.test_samples - len(test_long_run_qids)
+        print("remaining_test_samples", remaining_test_samples)
+        print("query_ids_unique",query_ids_unique)
         remaining_test_samples = max(0, remaining_test_samples)  # Ensure non-negative
 
         # Sample remaining test set from non-long-running queries
@@ -546,8 +553,7 @@ class queryPlanPGDataset_withbenchmark(InMemoryDataset):
         remaining_qids = np.setdiff1d(query_ids_unique, test_qid)
 
         # Split remaining queries into training and validation sets
-        num_val_samples = int(len(query_ids_unique) * self.val_samples)
-        val_qid = np.random.choice(remaining_qids, size=num_val_samples, replace=False)
+        val_qid = np.random.choice(remaining_qids, size=self.val_samples, replace=False)
         train_qid = np.setdiff1d(remaining_qids, val_qid)
 
         # get split slices

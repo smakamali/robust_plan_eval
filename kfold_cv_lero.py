@@ -262,7 +262,7 @@ def kfold_cv(
                     if pretrain == True:
                         pt_es = pl.callbacks.EarlyStopping(monitor='val_loss',patience=3, verbose=True)
                         pretrainer = pl.Trainer(
-                            max_epochs=1,accelerator='gpu',
+                            max_epochs=10,accelerator='gpu',
                             devices=1,
                             callbacks = [pt_es,checkpointing],
                             logger=logger,
@@ -368,8 +368,6 @@ def kfold_cv(
                         **config
                         )
 
-                
-                
             models = [balsa,neo,bao,roq,lero]
 
             # TODO: update single_test_lero.py
@@ -417,6 +415,7 @@ def kfold_cv(
         balsa_preds = np.nan_to_num(balsa_preds, nan=0.0, posinf=1.0, neginf=0.0)
 
         ########### Compute Perason's correlations ############
+
         pearson_coef1, _ = compute_pearsonr(opt_cost,targets)
         pearson_coef4, _ = compute_pearsonr(base_model_preds,targets)
         pearson_coef5, _ = compute_pearsonr(bao_preds,targets)

@@ -2,7 +2,7 @@
 
 import os
 import pickle
-from train import train
+from train_lero import train
 
 results_dir = os.path.join('.','results')
 
@@ -12,11 +12,13 @@ if __name__ == '__main__':
     # freeze_support()
 
     architectures = [
-                    'bao',
-                    'neo',
-                    'roq',
-                    ]
-    experiment_id = 'ceb_1000_x5_s3_loss'
+        'balsa',
+        'lero',
+        'bao',
+        'neo',
+        'roq',
+        ]
+    experiment_id = 'ceb_1000_x5_s3'
     
     training_time_dict  = {}
     for arch in architectures:
@@ -25,17 +27,18 @@ if __name__ == '__main__':
             experiment_id = experiment_id,
             architecture_p = arch,
             files_id= 'ceb_1000',
-            benchmark_files_id = 'job_main',
-            labeled_data_dir='./labeled_data',
-            max_epochs = 1000,
-            patience = 50,
-            num_experiments = 5,
+            proc_files_id='ceb_1000',
+            benchmark_files_id = 'job_v2.1',
+            labeled_data_dir='./labeled_data/ceb/',
+            max_epochs = 100,
+            patience = 10,
+            num_experiments = 3,
             num_workers = 5,
             seed = 3,
             reload_data = False,
-            val_samples = 0.1,
+            val_samples = 100,
             test_samples = 100,
-            test_slow_samples = None,
+            test_slow_samples = 0.5,
             target = 'latency'
             )
         

@@ -35,11 +35,11 @@ def train(
     set_seed(seed)
 
     # load model hyper-parameters
-    roq_config = load_model_params('roq')
-    neo_config = load_model_params('neo')
-    bao_config = load_model_params('bao')
-    lero_config = load_model_params('lero')
-    balsa_config = load_model_params('balsa')
+    config = load_model_params(architecture_p)
+    pretrain = config.pop('pretrain',True)
+    max_epochs = config.pop('max_epochs',max_epochs)
+    patience = config.pop('patience',patience)
+    min_delta = config.pop('min_delta',0.001)
 
     torch.set_float32_matmul_precision('high')
 
@@ -171,10 +171,6 @@ def train(
         tic = time.time()
 
         if 'neo' in architecture_p or 'bao' in architecture_p:
-            if 'neo' in architecture_p:
-                config = neo_config
-            else:
-                config = bao_config
             model = neo_bao(
                 num_node = node_attr_shape[0], 
                 node_dim = node_attr_shape[1],
@@ -189,7 +185,6 @@ def train(
                 )
             
         elif 'lero' in architecture_p:
-            config = lero_config
             model = lero(
                 num_node = node_attr_shape[0], 
                 numPlanFeat=plan_attr_shape,
@@ -201,8 +196,6 @@ def train(
             )
 
         elif 'balsa' in architecture_p:
-            config = balsa_config
-            pretrain = config.pop('pretrain',False)
             model = balsa(
                 num_node = node_attr_shape[0], 
                 node_dim = node_attr_shape[1],
@@ -216,7 +209,6 @@ def train(
                 )
             
         elif 'roq' in architecture_p:
-            config = roq_config
             model = roq(
                 num_node = node_attr_shape[0], 
                 node_dim = node_attr_shape[1],
@@ -239,7 +231,7 @@ def train(
             architecture_p,experiment_id, 
             lr,bs,do,num_q,num_params,run_id)
 
-        es = pl.callbacks.EarlyStopping(monitor='val_loss',patience=patience, verbose=True)
+        # es = pl.callbacks.EarlyStopping(monitor='val_loss',patience=patience, min_delta=0.001, verbose=True)
         
         logger = pl.loggers.TensorBoardLogger('./lightning_logs', name = model_name)
         
@@ -251,9 +243,11 @@ def train(
             verbose=True
             )
 
+        es = pl.callbacks.EarlyStopping(monitor='val_loss',patience=patience, min_delta=min_delta, verbose=True)
+
         if 'balsa' in architecture_p:
             if pretrain == True:
-                pt_es = pl.callbacks.EarlyStopping(monitor='val_loss',patience=3, verbose=True)
+                pt_es = pl.callbacks.EarlyStopping(monitor='val_loss',patience=3, min_delta=min_delta, verbose=True)
                 pretrainer = pl.Trainer(
                     max_epochs=10,accelerator='gpu',
                     devices=1,
@@ -276,7 +270,7 @@ def train(
                     **config
                     ).balsa_model
             else:
-                raise NotImplementedError("Balsa model must be pretrained")
+                raise NotImplementedError("Balsa model must be pretrained!")
                 
         trainer = pl.Trainer(
             max_epochs=max_epochs,accelerator='gpu',
@@ -319,7 +313,7 @@ if __name__ == '__main__':
         num_workers = 4,
         seed = 0,
         reload_data = True,
-        num_samples = 100,
+        # num_samples = 100,
         val_samples = 0.1,
         test_samples = 0.1,
         test_slow_samples = 0.8,
