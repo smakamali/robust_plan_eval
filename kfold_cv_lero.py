@@ -63,8 +63,6 @@ def kfold_cv(
     
     for run_id in range(num_experiments):
 
-        print('experiment:',experiment_id)
-        print('run',run_id)
         set_seed(run_id+seed)
 
         q_ids = []
@@ -82,7 +80,6 @@ def kfold_cv(
         labels = []
 
         for fold in range(n_splits):
-            print("Dataset fold:",fold)
             train_val_idx,test_idx =all_splits[fold]
             # print("train_val_qids",train_val_qids)
             train_idx, val_idx = train_test_split(
@@ -143,12 +140,21 @@ def kfold_cv(
 
             arch_labels = ['balsa','neo','bao','roq','lero']
             for idx,arch in enumerate(arch_labels):
+                print('experiment:',experiment_id)
+                print('run',run_id)
+                print("Dataset fold:",fold)
+                print("Architecture:",arch)
 
                 # load model hyper-parameters
                 config = load_model_params(arch)
+                pretrain = config.pop('pretrain',True)
+                max_epochs = config.pop('max_epochs',max_epochs)
+                patience = config.pop('patience',patience)
+                min_delta = config.pop('min_delta',0.001)
+                batch_size= config['batch_size']
 
                 # overwrite patience for lero as it does not need that many # TODO: handle this properly
-                usedPatience = 10 if arch == 'lero' else patience
+                # usedPatience = 10 if arch == 'lero' else patience
 
                 # set the loss function
                 if 'roq' in arch:
@@ -210,7 +216,6 @@ def kfold_cv(
                     )
                 
                 if 'balsa' in arch:
-                    pretrain = config.pop('pretrain',False)
                     model = balsa_simulation(
                         num_node = node_attr_shape[0], 
                         node_dim = node_attr_shape[1],
@@ -223,7 +228,7 @@ def kfold_cv(
                         **config
                         )
 
-                batch_size= config['batch_size']
+                
 
                 follow_batch = ['x_s']
 
@@ -246,7 +251,7 @@ def kfold_cv(
                 # do = str(model.dropout)[:5]
                 model_name = f'{arch}_{experiment_id}_lr{lr}_bs{bs}_{num_q}kq_{num_params}kp_fold{fold}_run{run_id}'
 
-                es = pl.callbacks.EarlyStopping(monitor='val_loss',patience=usedPatience, verbose=True)
+                es = pl.callbacks.EarlyStopping(monitor='val_loss',patience=patience, min_delta=min_delta, verbose=True)
                 
                 logger = pl.loggers.TensorBoardLogger('./lightning_logs', name = model_name)
                 
@@ -260,9 +265,9 @@ def kfold_cv(
 
                 if 'balsa' in arch:
                     if pretrain == True:
-                        pt_es = pl.callbacks.EarlyStopping(monitor='val_loss',patience=3, verbose=True)
+                        pt_es = pl.callbacks.EarlyStopping(monitor='val_loss',patience=3,min_delta=min_delta, verbose=True)
                         pretrainer = pl.Trainer(
-                            max_epochs=10,accelerator='gpu',
+                            max_epochs=1,accelerator='gpu',
                             devices=1,
                             callbacks = [pt_es,checkpointing],
                             logger=logger,
@@ -368,6 +373,8 @@ def kfold_cv(
                         **config
                         )
 
+                
+                
             models = [balsa,neo,bao,roq,lero]
 
             # TODO: update single_test_lero.py
@@ -415,7 +422,6 @@ def kfold_cv(
         balsa_preds = np.nan_to_num(balsa_preds, nan=0.0, posinf=1.0, neginf=0.0)
 
         ########### Compute Perason's correlations ############
-
         pearson_coef1, _ = compute_pearsonr(opt_cost,targets)
         pearson_coef4, _ = compute_pearsonr(base_model_preds,targets)
         pearson_coef5, _ = compute_pearsonr(bao_preds,targets)
