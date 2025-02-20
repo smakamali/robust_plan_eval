@@ -101,38 +101,44 @@ class LeroModelPairwise(pl.LightningModule):
         self.rlrop_factor = rlrop_factor
         self.batch_size = batch_size
         self.spearmans_corr = SpearmanCorrCoef()
-    
-    @staticmethod
-    def get_dataloader(X):
-        follow_batch = ['x_s']
-        return DataLoader(
-            X, batch_size=1024,
-            # persistent_workers=True,
-            shuffle=False, num_workers=0, follow_batch=follow_batch
-            )
+        self.follow_batch = ['x_s']
+        self.pair_batch_size = 120
     
     def get_pairs(self,batch):
         X1, X2 = get_training_pair(batch)
-        X1 = self.get_dataloader(X1)
-        X2 = self.get_dataloader(X2)
         return X1, X2
     
     def forward(self, batch):
-        # 1. enumerte plan pairs in the batch: X1 and X2
-        self.X1, self.X2 = self.get_pairs(batch)
-        # 2. score each plan
-        y_pred_1,y_pred_2=[],[]
-        y_label_1,y_label_2=[],[]
-        for batch in self.X1:
-            y_pred_1.append(self.lero_model(batch))
-            y_label_1.append(batch.y)
-        for batch in self.X2:
-            y_pred_2.append(self.lero_model(batch))
-            y_label_2.append(batch.y)
-        y_pred_1 = torch.cat(y_pred_1)[:,0].reshape(-1)
-        y_pred_2 = torch.cat(y_pred_2)[:,0].reshape(-1)
-        self.y_label_1 = torch.cat(y_label_1)
-        self.y_label_2 = torch.cat(y_label_2)
+        # Get raw pairs without creating DataLoaders
+        X1, X2 = self.get_pairs(batch)
+        
+        # Create single DataLoader for all pairs
+        combined_data = X1 + X2
+        loader = DataLoader(
+            combined_data, 
+            batch_size=self.pair_batch_size,
+            shuffle=False, 
+            num_workers=0, 
+            follow_batch=self.follow_batch
+        )
+        
+        # Process all data in one pass
+        all_preds = []
+        all_labels = []
+        for b in loader:
+            pred = self.lero_model(b)
+            all_preds.append(pred)
+            all_labels.append(b.y)
+        
+        all_preds = torch.cat(all_preds)
+        all_labels = torch.cat(all_labels)
+
+        # Split results back into X1 and X2
+        half_len = len(X1)
+        y_pred_1 = all_preds[:half_len,0].reshape(-1)
+        y_pred_2 = all_preds[half_len:,0].reshape(-1)
+        self.y_label_1 = all_labels[:half_len]
+        self.y_label_2 = all_labels[half_len:]
         # 3. compute sigmoid(diff)
         diff = y_pred_1 - y_pred_2
         prob_y = sigmoid(diff)
@@ -155,6 +161,10 @@ class LeroModelPairwise(pl.LightningModule):
             metrics_dict, batch_size = self.batch_size,
             on_step=False, on_epoch=True
             )
+        
+        # Force cleanup
+        torch.cuda.empty_cache()
+        
         return loss
     
     def validation_step(self, batch, batch_idx):
@@ -174,6 +184,10 @@ class LeroModelPairwise(pl.LightningModule):
             metrics_dict, batch_size = self.batch_size,
             on_step=False, on_epoch=True
             )
+        
+        # Force cleanup
+        torch.cuda.empty_cache()
+        
         return loss
 
     def configure_optimizers(self):

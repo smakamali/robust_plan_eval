@@ -35,11 +35,12 @@ def train(
     set_seed(seed)
 
     # load model hyper-parameters
-    config = load_model_params(architecture_p)
+    config = load_model_params(architecture_p, config_file='model_params_ceb.cfg')
     pretrain = config.pop('pretrain',True)
     max_epochs = config.pop('max_epochs',max_epochs)
     patience = config.pop('patience',patience)
     min_delta = config.pop('min_delta',0.001)
+    batch_size= config['batch_size']
 
     torch.set_float32_matmul_precision('high')
 
@@ -69,60 +70,26 @@ def train(
         exp_id=experiment_id
         )
     print("{} queries and {} samples in vlidation dataset: ".format(np.unique(np.array(val_set.query_id)).shape[0],val_set.len()))
-    
-    # print("loading test")
-    # test_set = queryPlanPairPGDataset(
-    #     split= 'test', 
-    #     files_id = files_id,
-    #     exp_id=experiment_id
-    #     )
-    # print("{} queries and {} samples in test dataset: ".format(np.unique(np.array(test_set.query_id)).shape[0],test_set.len()))
 
-    print("Data shapes:")
-    for key in train_set.data.keys():
-        if torch.is_tensor(train_set.data[key]):
-            print(f"{key}: {train_set.data[key].shape}")
-
-
-    plan_num_attr = int(train_set.data.plan_attr.shape[0]/len(train_set))
-    plan_num_node = train_set.data.plan_attr.shape[1]
-    node_costs = train_set.data.plan_attr.reshape(-1,plan_num_attr,plan_num_node).transpose(1,2).reshape(-1,plan_num_attr)[:,2]
-    print("node_costs:", node_costs)
-
-    # print("\nSlice information:")
-    # for key in train_set.slices.keys():
-    #     print(f"{key}: {train_set.slices[key]}")
-    
-#  -----------------------------------------------------------------
-    # Perform data transformations on inputs 
-    # drop_const = dropConst(train_set)
-    # train_set = drop_const(train_set)
-    # val_set = drop_const(val_set)
-    # test_set = drop_const(test_set)
-
+    # Perform data transformations
     null_imp = nullImputation(train_set)
     train_set = null_imp(train_set)
     val_set = null_imp(val_set)
-    # test_set = null_imp(test_set)
 
     minmax_scale = minmaxScale(train_set)
     train_set = minmax_scale(train_set)
     val_set = minmax_scale(val_set)
-    # test_set = minmax_scale(test_set)
 
     plan_num_attr = int(train_set.data.plan_attr.shape[0]/len(train_set))
     plan_num_node = train_set.data.plan_attr.shape[1]
     node_costs = train_set.data.plan_attr.reshape(-1,plan_num_attr,plan_num_node).transpose(1,2).reshape(-1,plan_num_attr)[:,2]
     print("node_costs:", node_costs)
     
-    # raise SystemExit
-
     # Perform data transformations on targets 
     if 'lero' not in architecture_p:
         yTransFunc = target_log_transform(train_set, target = target)
         train_set = yTransFunc.transform(train_set)
         val_set = yTransFunc.transform(val_set)
-        # test_set = yTransFunc.transform(test_set)
 
     plan_attr_shape = train_set[0].plan_attr.shape
     plan_ord_shape = train_set[0].plan_ord.shape
@@ -135,8 +102,6 @@ def train(
     print("graph_attr_shape",graph_attr_shape)
     print("edge_attr_shape",edge_attr_shape)
     print("node_attr_shape",node_attr_shape)
-
-    batch_size= 16 # roq_config['batch_size']
 
 
     follow_batch = ['x_s']
@@ -313,7 +278,7 @@ if __name__ == '__main__':
         num_workers = 4,
         seed = 0,
         reload_data = True,
-        # num_samples = 100,
+        num_samples = None,
         val_samples = 0.1,
         test_samples = 0.1,
         test_slow_samples = 0.8,

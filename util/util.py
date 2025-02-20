@@ -19,9 +19,9 @@ def load_best_model_paths(architecture_p,experiment_id,models_path=models_path):
         os.path.join(models_path,'best_model_paths_{}_{}.pkl'.format(architecture_p,experiment_id)), 'rb') as f:
         return pickle.load(f)
 
-def load_model_params(arch,config_dir=config_dir):
+def load_model_params(arch,config_dir=config_dir, config_file='model_params.cfg'):
     with open(
-        os.path.join(config_dir,'model_params.cfg'), 'r') as f:
+        os.path.join(config_dir,config_file), 'r') as f:
         model_params = json.load(f)
     
     return model_params[arch]
