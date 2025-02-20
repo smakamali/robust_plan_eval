@@ -1,9 +1,5 @@
 # ----------------------------- V0 ----------------------------------#
 # reproducing the model from the paper "Balsa: Learning a Query Optimizer Without Expert Demonstrations"
-# TODO: 
-# 1- implement the simulation phase by enumerating all subplans in each plan -> DONE!
-# 2- implement the transition from simulation to the actual training phase -> DONE!
-# 3- align the features of the query and plan nodes with the features used in the paper
 
 from tcnn import tcnn
 from util.torch_util import genLayerSizes
@@ -299,15 +295,14 @@ class balsa_model(pl.LightningModule):
         self.spearmans_corr = SpearmanCorrCoef()
         self.qerror = qErrorLossClass()
         
-        # set parameters based on `architecture`
-            
+
         self.node_dim = 2
         self.edge_dim = 3
         
         self.queryMLP = self.build_query_MLP()
         self.guidelineTCNN = self.build_tcnn()
         self.finalMLP, self.mean_layer, self.std_layer = self.build_final_layers()
-        
+
     def build_query_MLP(self):
         numQueryFeat = self.num_node*self.node_dim + self.num_node*self.num_node*self.edge_dim
         return produce_mlp(
@@ -316,7 +311,7 @@ class balsa_model(pl.LightningModule):
             LastLayerSize=self.query_module_out,
             dropout=self.dropout
             )
-    
+
     def build_tcnn(self):
         self.tcnn_in_channels = self.numPlanFeat[0] + self.query_module_out -3 # plan node features + query module (excluding cost from the plan features)
         
@@ -335,7 +330,7 @@ class balsa_model(pl.LightningModule):
 
         self.guidelineTCNNLayers.append(tcnn.DynamicPooling())
         return nn.Sequential(*self.guidelineTCNNLayers)
-    
+
     def build_final_layers(self):
         # Final layers
         self.final_layers_in_channels = self.TCNNout
@@ -410,7 +405,7 @@ class balsa_model(pl.LightningModule):
         else:
             sigma = torch.zeros(mu.shape).to(self.__device)
         return torch.stack((mu, sigma),dim=1)
-    
+
     def step(self, batch, stage="train"):
 
         y_pred = self(batch)

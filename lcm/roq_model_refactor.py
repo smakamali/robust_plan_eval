@@ -1,3 +1,5 @@
+# TODO: this refactored version should not be used as it is not fully tested yet
+
 from tcnn import tcnn
 from util.torch_util import genLayerSizes
 import pytorch_lightning as pl
@@ -8,64 +10,35 @@ from torchmetrics.regression import SpearmanCorrCoef
 from util.custom_loss import qErrorLossClass
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.optim import Adam, AdamW
-
-def produce_mlp(inputNumFeat,firstLayerSize,LastLayerSize,dropout,activation=nn.ReLU(), return_module=True):
-    """
-    This function generates a multi-layer perceptron with the specified number of layers and sizes.
-    
-    Args:
-    inputNumFeat: int, the number of features in the input layer
-    firstLayerSize: int, the number of neurons in the first layer
-    LastLayerSize: int, the number of neurons in the last layer
-    dropout: float, the dropout rate
-    activation: torch.nn.Module, the activation function
-    return_module: bool, whether to return the module or a list of layers
-    
-    Returns:
-    nn.Module or list of nn.Module: the MLP model
-    """
-    mlp_layers = []
-    mlp_layersizes = genLayerSizes(inputNumFeat,firstLayerSize,LastLayerSize)
-
-    for l in mlp_layersizes:
-        layerin,layerout = l[0],l[1]
-        mlp_layers.append(nn.Linear(layerin,layerout))
-        mlp_layers.append(nn.BatchNorm1d(layerout))
-        mlp_layers.append(activation)
-        mlp_layers.append(nn.Dropout(dropout))
-    if return_module:
-        return nn.Sequential(*mlp_layers)
-    else:
-        return mlp_layers
+from nn_util import produce_mlp
 
 class lcm_pl(pl.LightningModule):
     def __init__(self,
-                 query_graph_embd_dim = 16,
-                 query_module_in=256, # used only with query_processor = 'mlp'
-                 query_module_out=32, 
-                 node_embd_dim = 16,
-                 TCNNin = 64, TCNNout = 32,
-                 finalMLPin = 64, finalMLPout = 64, dropout=0.1, 
-                 qp_attheads = 3,
-                 qp_gnn_ls = 2,
-                 ext_plan = True,
-                 query_processor = 'gnn',
-                 num_node = None,
-                 node_dim = None,
-                 num_edge = None, # used only with query_processor = 'mlp'
-                 edge_dim = None,
+                 query_graph_embd_dim=16,
+                 query_module_in=256,  # used only with query_processor = 'mlp'
+                 query_module_out=32,
+                 node_embd_dim=16,
+                 TCNNin=64, TCNNout=32,
+                 finalMLPin=64, finalMLPout=64, dropout=0.1,
+                 qp_attheads=3,
+                 qp_gnn_ls=2,
+                 ext_plan=True,
+                 query_processor='gnn',
+                 num_node=None,
+                 node_dim=None,
+                 num_edge=None,  # used only with query_processor = 'mlp'
+                 edge_dim=None,
                  numPlanFeat=None,
                  numPlanOrdFeat=None,
-                 numQueryGraphFeat = None,
-                 with_var = False, device = None,
-                 criterion = None,
-                 batch_size = None,
-                 lr = 0.001,
-                 rlrop_patience = 10,
-                 rlrop_factor = 0.5,
+                 numQueryGraphFeat=None,
+                 with_var=False, device=None,
+                 criterion=None,
+                 batch_size=None,
+                 lr=0.001,
+                 rlrop_patience=10,
+                 rlrop_factor=0.5,
                  ):
         super().__init__()
-        self.validation_step_outputs = []
         self.with_var = with_var
         self.ext_plan = ext_plan
         self.query_processor = query_processor
@@ -78,106 +51,102 @@ class lcm_pl(pl.LightningModule):
         self.qp_attheads = qp_attheads
         self.criterion = criterion
         self.batch_size = batch_size
-        self.node_embd_dim_for_plan = node_embd_dim # used to compress node embeddings before appending to plan nodes - using node_embd_dim for now
-        query_graph_embd_dim = query_module_out # for now
+        self.node_embd_dim_for_plan = node_embd_dim
         self.lr = lr
         self.dropout = dropout
         self.rlrop_patience = rlrop_patience
         self.rlrop_factor = rlrop_factor
         self.spearmans_corr = SpearmanCorrCoef()
         self.qerror = qErrorLossClass()
-        
-        if ext_plan:
-            self.tcnn_in_channels = numPlanFeat[0] + self.node_embd_dim_for_plan
-        else:
-            self.tcnn_in_channels = numPlanFeat[0]
 
-        if query_processor == 'mlp':
-            numQueryFeat = num_node*node_dim + num_edge*edge_dim + numQueryGraphFeat
+        self.build_query_processor(query_graph_embd_dim, query_module_in, query_module_out, qp_gnn_ls, edge_dim, num_node, num_edge, node_dim, dropout)
+        self.build_plan_processor(TCNNin, TCNNout, device)
+        self.build_estimator(finalMLPin, finalMLPout, dropout)
+
+    def build_query_processor(self, query_graph_embd_dim, query_module_in, query_module_out, qp_gnn_ls, edge_dim, num_node, num_edge, node_dim, dropout):
+        if self.ext_plan:
+            self.tcnn_in_channels = self.numPlanFeat[0] + self.node_embd_dim_for_plan
+        else:
+            self.tcnn_in_channels = self.numPlanFeat[0]
+
+        if self.query_processor == 'mlp':
+            numQueryFeat = num_node * node_dim + num_edge * edge_dim + self.numQueryGraphFeat
             self.queryMLP = produce_mlp(
                 inputNumFeat=numQueryFeat,
                 firstLayerSize=query_module_in,
                 LastLayerSize=query_module_out,
                 dropout=dropout
-                )
-        elif query_processor == 'gnn':
-            # GCNN module using TransformerConv
-
+            )
+        elif self.query_processor == 'gnn':
             qp_gnn_layers = []
-            config = {'global_dim_in':numQueryGraphFeat, 
-                    'global_emb_dim':query_graph_embd_dim,
-                    # 'gnn_out_1st_layer': query_module_in,
-                    'global_dim_out':query_module_out,
-                    'in_channels':node_dim,
-                    'out_channels':node_embd_dim,
-                    'edge_dim':edge_dim,
-                    'heads':qp_attheads,
-                    'concat':True,
-                    'dropout':dropout}
-            
+            config = {'global_dim_in': self.numQueryGraphFeat,
+                      'global_emb_dim': query_graph_embd_dim,
+                      'global_dim_out': query_module_out,
+                      'in_channels': node_dim,
+                      'out_channels': self.node_embd_dim,
+                      'edge_dim': edge_dim,
+                      'heads': self.qp_attheads,
+                      'concat': True,
+                      'dropout': dropout}
+
             for l in range(qp_gnn_ls):
-                if l == 0: # first layer
+                if l == 0:
                     qp_gnn_layers.append(transformer_conv_v2(**config))
-                else: # hidden layers
-                    config['global_dim_in']=query_module_out
-                    config['in_channels']=node_embd_dim*qp_attheads
+                else:
+                    config['global_dim_in'] = query_module_out
+                    config['in_channels'] = self.node_embd_dim * self.qp_attheads
                     qp_gnn_layers.append(transformer_conv_v2(**config))
             self.qp_gnn_layers = nn.ModuleList(qp_gnn_layers)
 
-            self.lin_low_node_emb=nn.Linear(node_embd_dim*qp_attheads, self.node_embd_dim_for_plan)
+            self.lin_low_node_emb = nn.Linear(self.node_embd_dim * self.qp_attheads, self.node_embd_dim_for_plan)
 
         else:
             raise Exception("query_processor must be either gnn or mlp.")
 
-        # TCNN module from Neo
+    def build_plan_processor(self, TCNNin, TCNNout, device):
         self.guidelineTCNNLayers = []
         glTCNNLayerSizes = genLayerSizes(
-            inputNumFeat = self.tcnn_in_channels, 
-            firstLayerSize = TCNNin, 
-            LastLayerSize = TCNNout
-            )
-        
+            inputNumFeat=self.tcnn_in_channels,
+            firstLayerSize=TCNNin,
+            LastLayerSize=TCNNout
+        )
+
         for l in glTCNNLayerSizes:
-            layerin,layerout = l[0],l[1]
-            self.guidelineTCNNLayers.append(tcnn.BinaryTreeConv(layerin, 
-                                                                layerout, device=device))
+            layerin, layerout = l[0], l[1]
+            self.guidelineTCNNLayers.append(tcnn.BinaryTreeConv(layerin, layerout, device=device))
             self.guidelineTCNNLayers.append(tcnn.TreeLayerNorm())
             self.guidelineTCNNLayers.append(tcnn.TreeActivation(nn.ReLU()))
-#             self.guidelineTCNNLayers.append(nn.Dropout(dropout))
         self.guidelineTCNNLayers.append(tcnn.DynamicPooling())
         self.guidelineTCNN = nn.Sequential(*self.guidelineTCNNLayers)
-        
-        # Final layers
-        self.final_layers_in_channels = TCNNout+query_module_out
+
+    def build_estimator(self, finalMLPin, finalMLPout, dropout):
+        self.final_layers_in_channels = self.tcnn_in_channels + self.numPlanFeat[1]
         self.finalMLP = produce_mlp(
             inputNumFeat=self.final_layers_in_channels,
             firstLayerSize=finalMLPin,
             LastLayerSize=finalMLPout,
             dropout=dropout
-            )
-        
-        # Mean parameters
+        )
+
         self.meanLayers = produce_mlp(
             inputNumFeat=finalMLPout,
             firstLayerSize=finalMLPout,
             LastLayerSize=32,
             dropout=dropout,
             return_module=False
-            )
-        
+        )
         self.meanLayers.append(nn.Linear(32, 1))
         self.meanLayers.append(nn.Sigmoid())
         self.mean_layer = nn.Sequential(*self.meanLayers)
-        
-        # Standard deviation parameters
-        if with_var:
+
+        if self.with_var:
             self.stdLayers = produce_mlp(
                 inputNumFeat=finalMLPout,
                 firstLayerSize=finalMLPout,
                 LastLayerSize=32,
                 dropout=dropout,
                 return_module=False
-                )
+            )
             self.stdLayers.append(nn.Linear(32, 1))
             self.stdLayers.append(nn.Softplus())
             self.std_layer = nn.Sequential(*self.stdLayers)

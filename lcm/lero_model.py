@@ -14,32 +14,24 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.optim import AdamW
 
 sigmoid = nn.Sigmoid()
-def collate_pairwise_fn(x):
-    trees1 = []
-    trees2 = []
-    labels = []
-
-    for tree1, tree2, label in x:
-        trees1.append(tree1)
-        trees2.append(tree2)
-        labels.append(label)
-    return trees1, trees2, labels
 
 def get_training_pair(candidates):
-    assert len(candidates) >= 2
-    X1, X2 = [], []
+    if len(candidates) >= 2:
+        X1, X2 = [], []
 
-    i = 0
-    while i < len(candidates) - 1:
-        s1 = candidates[i]
-        j = i + 1
-        while j < len(candidates):
-            s2 = candidates[j]
-            X1.append(s1)
-            X2.append(s2)
-            j += 1
-        i += 1
-    return X1, X2
+        i = 0
+        while i < len(candidates) - 1:
+            s1 = candidates[i]
+            j = i + 1
+            while j < len(candidates):
+                s2 = candidates[j]
+                X1.append(s1)
+                X2.append(s2)
+                j += 1
+            i += 1
+        return X1, X2
+    if len(candidates) == 1:
+        return [candidates[0]], [candidates[0]]
 
 class LeroNet(nn.Module):
     def __init__(self, input_feature_dim, device) -> None:
