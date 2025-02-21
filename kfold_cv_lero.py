@@ -146,7 +146,7 @@ def kfold_cv(
                 print("Architecture:",arch)
 
                 # load model hyper-parameters
-                config = load_model_params(arch)
+                config = load_model_params(arch, config_file='model_params_job.cfg')
                 pretrain = config.pop('pretrain',True)
                 max_epochs = config.pop('max_epochs',max_epochs)
                 patience = config.pop('patience',patience)
@@ -265,9 +265,9 @@ def kfold_cv(
 
                 if 'balsa' in arch:
                     if pretrain == True:
-                        pt_es = pl.callbacks.EarlyStopping(monitor='val_loss',patience=3,min_delta=min_delta, verbose=True)
+                        pt_es = pl.callbacks.EarlyStopping(monitor='val_loss',patience=2,min_delta=min_delta, verbose=True)
                         pretrainer = pl.Trainer(
-                            max_epochs=1,accelerator='gpu',
+                            max_epochs=5,accelerator='gpu',
                             devices=1,
                             callbacks = [pt_es,checkpointing],
                             logger=logger,
@@ -417,8 +417,18 @@ def kfold_cv(
         rt_values = np.concatenate(rt_values,axis=1)
         so_values = np.concatenate(so_values,axis=1)
 
+        print("lero_preds",lero_preds)
+        print("Distribution of lero predictions:")
+        print("min:",np.min(lero_preds))
+        print("max:",np.max(lero_preds))
+        print("mean:",np.mean(lero_preds))
+        print("std:",np.std(lero_preds))
+        print("25th percentile:",np.percentile(lero_preds,25))
+        print("50th percentile (median):",np.percentile(lero_preds,50))
+        print("75th percentile:",np.percentile(lero_preds,75))
+
         # replace nans # TODO: find the root cause, handle this properly.
-        lero_preds = np.nan_to_num(lero_preds, nan=0.0, posinf=1.0, neginf=0.0)
+        # lero_preds = np.nan_to_num(lero_preds, nan=0.0, posinf=1.0, neginf=0.0)
         balsa_preds = np.nan_to_num(balsa_preds, nan=0.0, posinf=1.0, neginf=0.0)
 
         ########### Compute Perason's correlations ############
@@ -510,15 +520,16 @@ if __name__ == '__main__':
     # from multiprocessing import freeze_support
     # freeze_support()
     kfold_cv(
-        experiment_id = 'job_main_3ex10kf_s1',
+        experiment_id = 'job_main_5x_10kf_s313', 
+        # experiment_id = 'temp', 
         files_id = 'job_v2.1',
         labeled_data_dir = './labeled_data/job/',
         max_epochs = 1000,
         patience = 50,
         num_workers = 4,
-        seed = 1,
-        reload_data = True,
+        seed = 313,
+        reload_data = False,
         target = 'latency',
         n_splits = 10,
-        num_experiments = 3,
+        num_experiments = 5,
         )

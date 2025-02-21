@@ -9,9 +9,9 @@ from scipy.stats import pearsonr
 from IPython.display import display
 
 def plotxvsy(x, y, xerr=None,err=None, xl='X', yl='Y',scale='linear',lims=None):
+    
     a = x.reshape(-1)
     b = y.reshape(-1)
-    err = err.reshape(-1)
     plt.figure(figsize = (6,6))
     plt.xlabel(xl)
     plt.ylabel(yl)
@@ -23,7 +23,9 @@ def plotxvsy(x, y, xerr=None,err=None, xl='X', yl='Y',scale='linear',lims=None):
     plt.title(xl+" vs. "+yl)
     plt.scatter(a,b, s=5)
     # if err is not None:
-    plt.errorbar(a, b, xerr=xerr,yerr=err, fmt="o")
+    if xerr is not None and err is not None:
+        err = err.reshape(-1)
+        plt.errorbar(a, b, xerr=xerr,yerr=err, fmt="o")
     # else:
     plt.show()
 

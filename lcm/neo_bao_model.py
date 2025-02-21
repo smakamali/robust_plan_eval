@@ -15,21 +15,8 @@ from torchmetrics.regression import SpearmanCorrCoef
 from util.custom_loss import qErrorLossClass
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.optim import AdamW
+from lcm.nn_util import produce_mlp
 
-def produce_mlp(inputNumFeat,firstLayerSize,LastLayerSize,dropout,activation=nn.ReLU(), return_module=True):
-    mlp_layers = []
-    mlp_layersizes = genLayerSizes(inputNumFeat,firstLayerSize,LastLayerSize)
-
-    for l in mlp_layersizes:
-        layerin,layerout = l[0],l[1]
-        mlp_layers.append(nn.Linear(layerin,layerout))
-        mlp_layers.append(nn.BatchNorm1d(layerout))
-        mlp_layers.append(activation)
-        mlp_layers.append(nn.Dropout(dropout))
-    if return_module:
-        return nn.Sequential(*mlp_layers)
-    else:
-        return mlp_layers
 
 class lcm_pl(pl.LightningModule):
     def __init__(self,
@@ -66,6 +53,7 @@ class lcm_pl(pl.LightningModule):
         self.numPlanFeat = numPlanFeat
         self.numPlanOrdFeat = numPlanOrdFeat
         self.num_node = num_node
+        self.num_edge = num_edge
         self.node_dim = node_dim
         self.edge_dim = edge_dim
         self.node_embd_dim = node_embd_dim
@@ -74,7 +62,12 @@ class lcm_pl(pl.LightningModule):
         self.criterion = criterion
         self.batch_size = batch_size
         self.architecture = architecture
+        self.TCNNin = TCNNin
+        self.TCNNout = TCNNout
+        self.finalMLPin = finalMLPin
+        self.finalMLPout = finalMLPout
         self.node_embd_dim_for_plan = node_embd_dim # used to compress node embeddings before appending to plan nodes - using node_embd_dim for now
+        self.query_module_in = query_module_in
         self.query_module_out = query_module_out # for now
         self.lr = lr
         self.dropout = dropout
@@ -85,108 +78,118 @@ class lcm_pl(pl.LightningModule):
         
         # set parameters based on `architecture`
         if 'neo' in self.architecture:
+            self.node_dim = 2
+            self.edge_dim = 3
+            self.excluded_plan_node_features = 3
+            self.queryMLP = self.build_query_MLP()
+            self.tcnn_in_channels = self.numPlanFeat[0] + self.query_module_out - self.excluded_plan_node_features
+
             
-            if 'plus' not in self.architecture:
-                self.node_dim = 2
-                self.edge_dim = 3
-                numQueryGraphFeat_copy = 0
-            else:
-                numQueryGraphFeat_copy = self.numQueryGraphFeat
-            
-            numQueryFeat = self.num_node*self.node_dim + self.num_node*self.num_node*self.edge_dim + numQueryGraphFeat_copy
-            self.queryMLP = produce_mlp(inputNumFeat=numQueryFeat,
-                                    firstLayerSize=query_module_in,
-                                    LastLayerSize=query_module_out,
-                                    dropout=dropout)
-            self.tcnn_in_channels = self.numPlanFeat[0] + self.query_module_out
-        
         elif 'bao' in self.architecture:
-            
-            if 'plus' not in self.architecture:
-                self.node_dim = 2
-            
-            self.tcnn_in_channels = self.numPlanFeat[0] + self.node_dim
+            self.node_dim = 2
+            # self.edge_dim = 0
+            self.excluded_plan_node_features = 2
+            self.tcnn_in_channels = self.numPlanFeat[0] + self.node_dim - self.excluded_plan_node_features
+
         
         else:
             raise Exception("architecture must be either `neo` or `bao`.")
 
+        self.guidelineTCNN = self.build_tcnn()
+        self.finalMLP, self.mean_layer, self.std_layer = self.build_final_layers()
+
+    def build_query_MLP(self):
+        numQueryFeat = self.num_node*self.node_dim + self.num_node*self.num_node*self.edge_dim
+        return produce_mlp(
+            inputNumFeat=numQueryFeat,
+            firstLayerSize=self.query_module_in,
+            LastLayerSize=self.query_module_out,
+            dropout=self.dropout
+            )
+
+    def build_tcnn(self):
         # TCNN module from Neo and Bao
         self.guidelineTCNNLayers = []
-        glTCNNLayerSizes = genLayerSizes(inputNumFeat = self.tcnn_in_channels, 
-                                  firstLayerSize = TCNNin, 
-                                  LastLayerSize = TCNNout)
+        glTCNNLayerSizes = genLayerSizes(
+            inputNumFeat = self.tcnn_in_channels, 
+            firstLayerSize = self.TCNNin, 
+            LastLayerSize = self.TCNNout
+        )
         for l in glTCNNLayerSizes:
             layerin,layerout = l[0],l[1]
-            self.guidelineTCNNLayers.append(tcnn.BinaryTreeConv(layerin, 
-                                                                layerout, device=device))
+            self.guidelineTCNNLayers.append(tcnn.BinaryTreeConv(layerin, layerout, device=self.__device))
             self.guidelineTCNNLayers.append(tcnn.TreeLayerNorm())
             self.guidelineTCNNLayers.append(tcnn.TreeActivation(nn.ReLU()))
-#             self.guidelineTCNNLayers.append(nn.Dropout(dropout))
+
         self.guidelineTCNNLayers.append(tcnn.DynamicPooling())
-        self.guidelineTCNN = nn.Sequential(*self.guidelineTCNNLayers)
-        
+        return nn.Sequential(*self.guidelineTCNNLayers)
+
+    def build_final_layers(self):
         # Final layers
-        self.final_layers_in_channels = TCNNout
-        self.finalMLP = produce_mlp(inputNumFeat=self.final_layers_in_channels,
-                                    firstLayerSize=finalMLPin,
-                                    LastLayerSize=finalMLPout,
-                                    dropout=dropout)
+        self.final_layers_in_channels = self.TCNNout
+        finalMLP = produce_mlp(
+            inputNumFeat=self.final_layers_in_channels,
+            firstLayerSize=self.finalMLPin,
+            LastLayerSize=self.finalMLPout,
+            dropout=self.dropout
+        )
         
         # Mean parameters
-        self.meanLayers = produce_mlp(inputNumFeat=finalMLPout,
-                                    firstLayerSize=finalMLPout,
-                                    LastLayerSize=32,
-                                    dropout=dropout,
-                                    return_module=False)
-        self.meanLayers.append(nn.Linear(32, 1))
-        self.meanLayers.append(nn.Sigmoid())
-        self.mean_layer = nn.Sequential(*self.meanLayers)
+        meanLayers = produce_mlp(
+            inputNumFeat=self.finalMLPout,
+            firstLayerSize=self.finalMLPout,
+            LastLayerSize=32,
+            dropout=self.dropout,
+            return_module=False
+        )
+        meanLayers.append(nn.Linear(32, 1))
+        meanLayers.append(nn.Sigmoid())
+        mean_layer = nn.Sequential(*meanLayers)
         
         # Standard deviation parameters
-        if isinstance(criterion,aleatoric_loss):
-            self.stdLayers = produce_mlp(inputNumFeat=finalMLPout,
-                                    firstLayerSize=finalMLPout,
-                                    LastLayerSize=32,
-                                    dropout=dropout,
-                                    return_module=False)
-            self.stdLayers.append(nn.Linear(32, 1))
-            self.stdLayers.append(nn.Softplus())
-            self.std_layer = nn.Sequential(*self.stdLayers)
-    
+        std_layer = None
+        if isinstance(self.criterion,aleatoric_loss):
+            stdLayers = produce_mlp(
+                inputNumFeat=self.finalMLPout,
+                firstLayerSize=self.finalMLPout,
+                LastLayerSize=32,
+                dropout=self.dropout,
+                return_module=False
+            )
+            stdLayers.append(nn.Linear(32, 1))
+            stdLayers.append(nn.Softplus())
+            std_layer = nn.Sequential(*stdLayers)
+        return finalMLP, mean_layer, std_layer
+
     def forward(self, batch):
         x, edge_index, edge_attr, graph_attr = batch.x_s, batch.edge_index_s,batch.edge_attr_s, batch.graph_attr
         batch_index = batch.x_s_batch
         plan_attr, plan_ord = batch.plan_attr, batch.plan_ord
         edge_index = edge_index.long()
-        plan_attr = plan_attr.reshape(-1, self.numPlanFeat[0], self.numPlanFeat[1]).float()
+        plan_attr = plan_attr.reshape(-1, self.numPlanFeat[0], self.numPlanFeat[1]).float()[:,self.excluded_plan_node_features:,:] # batch_size x plan_node_dim x num_plan_nodes
         plan_ord = plan_ord.reshape(-1, self.numPlanOrdFeat[0], self.numPlanOrdFeat[1]).long()
         graph_attr = graph_attr.reshape(-1,self.numQueryGraphFeat)
         batch_size = batch.y.shape[0]
         
         if 'neo' in self.architecture:
-            if 'plus' not in self.architecture:
-                x = x[:,:2] # extract only the features used in Neo
-                edge_attr = edge_attr[:,-3:] # extract only the features used in Neo
+            x = x[:,:self.node_dim] # extract only the features used in Neo
+            edge_attr = edge_attr[:,-self.edge_dim:] # extract only the features used in Neo
 
             x_dense,_ = to_dense_batch(x,batch_index,self.num_node) # B x 5 x 6
             x_rsh = x_dense.reshape(batch_size,-1) # B x 30
             adj_dense = to_dense_adj(edge_index,batch_index,edge_attr=edge_attr,max_num_nodes=self.num_node) # B x N x N x len(edge_attr)
             edge_rsh = adj_dense.reshape(batch_size,-1)
             
-            if 'plus' in self.architecture:
-                mlpin = torch.concat((x_rsh,edge_rsh,graph_attr),1)
-            else:
-                mlpin = torch.concat((x_rsh,edge_rsh),1)
+            mlpin = torch.concat((x_rsh,edge_rsh),1)
 
             # flatten the whole graph into a one-dimensional vector
             qp_out = self.queryMLP(mlpin) # B x query_module_out
             qp_out = torch.unsqueeze(qp_out,dim=2)
-            qp_out = torch.repeat_interleave(qp_out,self.numPlanFeat[1],dim=2) # B x 
+            qp_out = torch.repeat_interleave(qp_out,plan_attr.shape[2],dim=2) # B x 
             plan_attr = torch.concat((plan_attr,qp_out),dim=1)
 
         elif 'bao' in self.architecture:
-            if 'plus' not in self.architecture:
-                x = x[:,:2]
+            x = x[:,:self.node_dim]
             x_dense,_ = to_dense_batch(x,batch_index) # B x 5 x 6
             # extract the relevant tables only and extend the plan features with table features
             # get the table onehot encoding for all plan nodes 
@@ -197,10 +200,10 @@ class lcm_pl(pl.LightningModule):
         
             # more efficient way of appending the plan nodes with table features that is scalable in both batch size and node embedding size 
             filt_x = torch.transpose(x_dense,dim0=1,dim1=2) # B x 6 x 5
-            filt_x = torch.tile(filt_x,dims=(1,self.numPlanFeat[1],1)) # B x 144 x 5
+            filt_x = torch.tile(filt_x,dims=(1,plan_attr.shape[2],1)) # B x 144 x 5
             filt_x = filt_x*table_onehot
             filt_x = torch.sum(filt_x,dim=-1) # B x 144
-            filt_x = filt_x.reshape(batch_size,self.numPlanFeat[1],self.node_dim) # B x 24 x 6
+            filt_x = filt_x.reshape(batch_size,plan_attr.shape[2],self.node_dim) # B x 24 x 6
             filt_x = torch.transpose(filt_x,dim0=1,dim1=2) # B x 6 x 24
             plan_attr = torch.concat((plan_attr,filt_x),1) # B x 19 x 24
         
@@ -216,38 +219,30 @@ class lcm_pl(pl.LightningModule):
         else:
             sigma = torch.zeros(mu.shape).to(self.__device)
         return torch.stack((mu, sigma),dim=1)
-            
-    def training_step(self, batch, batch_idx):
-        # training_step defines the train loop. It is independent of forward
+
+    def step(self, batch, stage="train"):
+
         y_pred = self(batch)
         labels = batch.y_t.reshape(-1,1)
         loss = self.criterion(y_pred, labels)
         corr = self.spearmans_corr(y_pred[:,0], labels)
         qerr = self.qerror(y_pred[:,0], labels)
-        metrics_dict = {'train_loss':loss, 'train_corr':corr, 'train_q-error':qerr}
-        self.log_dict(
-            metrics_dict, batch_size = self.batch_size,
-            on_step=False, on_epoch=True
-            )
-        return loss
-    
-    def validation_step(self, batch, batch_idx):
-        y_pred = self(batch)
-        labels = batch.y_t.reshape(-1,1)
-        loss = self.criterion(y_pred, labels)
-        corr = self.spearmans_corr(y_pred[:,0], labels)
-        qerr = self.qerror(y_pred[:,0], labels)
-        metrics_dict = {'val_loss':loss, 'val_corr':corr, 'val_q-error':qerr}
+        metrics_dict = {f"{stage}_loss":loss, f"{stage}_corr":corr, f"{stage}_q-error":qerr}
         self.log_dict(
             metrics_dict, batch_size = self.batch_size,
             on_step=False, on_epoch=True
             )
         return metrics_dict
     
+    def training_step(self, batch, batch_idx):
+        return self.step(batch, stage="train")["train_loss"]
+    
+    def validation_step(self, batch, batch_idx):
+        return self.step(batch, stage="val")
+    
     def configure_optimizers(self):
         optimizer = AdamW(self.parameters(),lr=self.lr)
-        scheduler = ReduceLROnPlateau(
-            optimizer,patience=self.rlrop_patience,factor=self.rlrop_factor)
+        scheduler = ReduceLROnPlateau(optimizer,patience=self.rlrop_patience,factor=self.rlrop_factor)
         return {
             "optimizer": optimizer,
             "lr_scheduler": {
@@ -257,7 +252,6 @@ class lcm_pl(pl.LightningModule):
                 "frequency": 1,
                 }
             }
-        # return optimizer
     
     def predict_step(self, batch, batch_idx, dataloader_idx=0):
         return self(batch)

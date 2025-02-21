@@ -119,7 +119,7 @@ def test(
     # Lero
     ypreds_test_lero = trainer.predict(lero, test_loader)
     ypreds_test_lero = torch.vstack(ypreds_test_lero)
-    ypreds_test_lero=yTransFunc.inverse_transform(torch.Tensor(ypreds_test_lero))
+    # ypreds_test_lero=yTransFunc.inverse_transform(torch.Tensor(ypreds_test_lero))
 
     # Balsa
     ypreds_test_balsa = trainer.predict(balsa, test_loader)
