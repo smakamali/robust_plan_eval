@@ -12,13 +12,14 @@ if __name__ == '__main__':
     # freeze_support()
 
     architectures = [
-        'balsa',
         'lero',
+        'balsa',
         'bao',
         'neo',
         'roq',
         ]
-    experiment_id = 'ceb_1000_x5_s3'
+    # experiment_id = 'ceb_1000_x3_s313'
+    experiment_id = 'ceb_1000_x5_s312'
     
     training_time_dict  = {}
     for arch in architectures:
@@ -32,10 +33,11 @@ if __name__ == '__main__':
             labeled_data_dir='./labeled_data/ceb/',
             max_epochs = 100,
             patience = 10,
-            num_experiments = 3,
+            num_experiments = 5,
             num_workers = 5,
-            seed = 3,
+            seed = 312,
             reload_data = False,
+            num_samples = None,
             val_samples = 100,
             test_samples = 100,
             test_slow_samples = 0.5,

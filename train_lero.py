@@ -212,9 +212,9 @@ def train(
 
         if 'balsa' in architecture_p:
             if pretrain == True:
-                pt_es = pl.callbacks.EarlyStopping(monitor='val_loss',patience=3, min_delta=min_delta, verbose=True)
+                pt_es = pl.callbacks.EarlyStopping(monitor='val_loss',patience=2, min_delta=min_delta, verbose=True)
                 pretrainer = pl.Trainer(
-                    max_epochs=10,accelerator='gpu',
+                    max_epochs=5,accelerator='gpu',
                     devices=1,
                     callbacks = [pt_es,checkpointing],
                     logger=logger,
