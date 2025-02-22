@@ -23,6 +23,7 @@ results_dir = os.path.join('.','results')
    
 def test(
         experiment_id = 'job',
+        file_experiment_id = None,
         files_id = 'temp', proc_files_id=None, try_gpu_inf=True, 
         seed = 1, num_workers=5, show_fig = False,
         benchmark_files_id='',
@@ -37,6 +38,9 @@ def test(
         ):
 
     set_seed(seed)
+
+    if file_experiment_id is None:
+        file_experiment_id = experiment_id
 
     # setting torch.device()
     if try_gpu_inf:
@@ -84,7 +88,7 @@ def test(
         force_reload=reload_data, seed = seed,
         val_samples = val_samples, test_samples = test_samples,
         test_slow_samples = test_slow_samples,
-        exp_id=experiment_id
+        exp_id=file_experiment_id
         )
     print("{} queries and {} samples in training dataset: ".format(np.unique(np.array(train_set.query_id)).shape[0],train_set.len()))
     
@@ -92,7 +96,7 @@ def test(
     val_set = queryPlanPGDataset_withbenchmark(
         split= 'val', 
         files_id = files_id,
-        exp_id=experiment_id
+        exp_id=file_experiment_id
         )
     print("{} queries and {} samples in vlidation dataset: ".format(np.unique(np.array(val_set.query_id)).shape[0],val_set.len()))
     
@@ -100,7 +104,7 @@ def test(
     test_set = queryPlanPGDataset_withbenchmark(
         split= test_split, 
         files_id = files_id,
-        exp_id=experiment_id
+        exp_id=file_experiment_id
         )
     print("{} queries and {} samples in test dataset: ".format(np.unique(np.array(test_set.query_id)).shape[0],test_set.len()))
     
@@ -844,18 +848,19 @@ def test(
 if __name__ == '__main__':
 
     test(
-        experiment_id = 'ceb_1000_x5_s312',
-        files_id = 'ceb_1000',
-        proc_files_id='ceb_1000',
-        benchmark_files_id = 'job_v2.1',
-        labeled_data_dir='./labeled_data/ceb/',
+        experiment_id = 'dsb_1000_x5_s313',
+        file_experiment_id = 'dsb_wlsh_x3_s313',
+        files_id = 'small_dsb_1000',
+        proc_files_id='small_dsb_1000',
+        benchmark_files_id = 'large_dsb_1000',
+        labeled_data_dir='./labeled_data/dsb/',
         test_split = 'benchmark',
         try_gpu_inf=True,
         num_workers=1,
         show_fig = False,
         cons_ratio_sp = np.arange(0.0,3,0.05),
         prune_ratio_sp = np.arange(0,.75,0.05),
-        seed = 312,
+        seed = 313,
         reload_data = False,
         val_samples = 100,
         test_samples = 100,

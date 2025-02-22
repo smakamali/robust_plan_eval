@@ -1,9 +1,5 @@
 ############ LOAD QUERIES, COMPILE AND LABEL PLANS #############
 
-#  TODO: automate sample collection 
-#  TODO: specify a separate directory for output
-# --> TODO: make extraction of join attractions from the input optional and limited to the max_num_queries -> add a db stats extraction in this script before loading queries.
-
 import os
 import shutil
 import subprocess as sp
@@ -225,13 +221,13 @@ if __name__ == '__main__':
 
     gen_label_plans(
         data_slice = None, # alternative to `start` and `num_samples`, gives the slice of queries to process
-        start = None, # alternative to data_slice, gives the starting index, must be provided together with `num_samples`
-        num_samples = None, # alternative to data_slice, gives the number of samples, must be provided together with `start`
+        start = 0, # alternative to data_slice, gives the starting index, must be provided together with `num_samples`
+        num_samples = 500, # alternative to data_slice, gives the number of samples, must be provided together with `start`
         schema_name = 'imdb', # schema name
-        encFileID = "job_v2.1", # a unique id for the dataset
+        encFileID = "ceb_wl_shift", # a unique id for the dataset
         conn_str_path = './conn_str', # path to the file containing a connection string to the database
-        input_dir = "./input/job/", # the directory that contains query.sql file(s)
-        opt_plan_path = './job_plans/', # the path used to store explain outputs and guidelines
+        input_dir = "./input/ceb-imdb-13k/unused/", # the directory that contains query.sql file(s)
+        opt_plan_path = './ceb_wl_shift_plans/', # the path used to store explain outputs and guidelines
         internal_dir = './internal/', # the path to store intermediary files
         labeled_data_dir = './labeled_data/',
         sample_size = 2000, # number of samples used per table
@@ -239,5 +235,3 @@ if __name__ == '__main__':
         dynamic_timeout = True, # determines whether dynamic timeout is used 
         dynamic_timeout_factor = 10 # determines the multiplier for the dynamic timeout with respect to the optimizer's plan as a baseline, used only when `dynamic_timeout = True`
         )
-
-    

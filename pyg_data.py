@@ -1,9 +1,7 @@
-# TODO: Make sampling test from long running optional 
-
 import os
 import pickle
 import math
-from itertools import compress, combinations
+from itertools import compress
 import numpy as np
 import pandas as pd
 import torch
