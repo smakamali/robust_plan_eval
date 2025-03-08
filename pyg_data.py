@@ -241,57 +241,68 @@ class queryPlanPGDataset_nosplit(InMemoryDataset):
         with open(self.raw_file_names[0],'rb') as f:
             queries_list = pickle.load(f)
         
+        # sample the raw dataset if self.num_samples is provided
         if self.num_samples is not None:
-            np.random.seed(self.seed)
-            queries_list = np.random.choice(queries_list, size = self.num_samples, replace = False)
-            print("sampling {} queries",len(queries_list))
+            random.seed(self.seed)
+            queries_list = random.sample(queries_list, k = self.num_samples)
+        
+        # get query ids
+        query_ids_unique = np.array([q.q_id for q in queries_list])
         fin_samples = len(queries_list)
 
         # this loop prepares the plan trees
         plan_trees = []
-        for query in queries_list:
+        plan_trees_ref = {}
+        for i,query in enumerate(queries_list):
             for j in query.plans.keys():
                 plan = query.plans[j]
                 plan_trees.append(plan.plan_tree)
-
-        # prepare plan trees for TCNN
-        prep_trees=prepare_trees(plan_trees, transformer, left_child, right_child, cuda=False)
+                plan_trees_ref[str(i)+'-'+str(j)]=len(plan_trees)-1
+        prep_trees = prepare_trees(plan_trees, transformer, left_child, right_child, cuda=False)
         
         # create individual Data objects for each single sample
         # then put them in data_list
         data_list = []
         query_ids = []
-        opt_plan_msk = []
-        plan_latency_list = []
-        prep_tree_id = 0
+        opt_plan_latencies = []
         for i,query in enumerate(queries_list):
             if i%5 == 0:
                 clear_output(wait=True)
                 print('Loading the data ... {}%'.format(math.floor((i/fin_samples)*100)))
+            
+            opt_plan = query.plans[0]
+
+            if opt_plan.latency is None or opt_plan.cost.size == 0:
+                print(">>>>>>>>>>>>>skip query {} completely as the default plan is not labeled properly!".format(i))
+                continue
+
+            # extract query_id, optimizer plan latency pair for non-benchmark queries
+            opt_plan_latency = opt_plan.latency
+            opt_plan_latencies.append([query.q_id,opt_plan.latency])
+
             for j in query.plans.keys():
                 plan = query.plans[j]
                 
                 # skip the plan if the plan's cost or latency are not populated
                 if plan.latency is None or plan.cost.size == 0:
-                    break
-                
-                # replace the latency for timed out plans with 10*opt_plan_latency 
-                opt_plan = False
+                    print(">>>>>>>>>>>>>skip query {}, plan {}".format(i,j))
+                    continue
+
                 plan_latency = plan.latency
+
+                # replace the latency for timed out plans with 10*opt_plan_latency 
+                opt_choice = False
                 if plan.hintset_id == 0:
-                    opt_plan = True
-                    opt_plan_latency = plan.latency
+                    opt_choice = True
                 else:
                     if plan.timed_out == True:
                         plan_latency = 10*opt_plan_latency
                     
-                opt_plan_msk.append(opt_plan)
-                plan_latency_list.append(plan_latency)
 
                 # assign plan tree attributes and orders
-                prep_tree_attr = prep_trees[0][prep_tree_id]
-                prep_tree_ord = prep_trees[1][prep_tree_id]
-                prep_tree_id+=1
+                plan_ref_idx = plan_trees_ref[str(i)+'-'+str(j)]
+                prep_tree_attr = prep_trees[0][plan_ref_idx]
+                prep_tree_ord = prep_trees[1][plan_ref_idx]
 
                 data = Data(
                     x_s=torch.Tensor(query.node_attr),
@@ -303,11 +314,10 @@ class queryPlanPGDataset_nosplit(InMemoryDataset):
                     plan_ord=torch.Tensor(prep_tree_ord),
                     query_id = query.q_id,
                     num_joins = torch.Tensor([int(query.edge_indc.shape[1]/2)]),
-                    opt_choice = torch.Tensor([opt_plan]),
+                    opt_choice = torch.Tensor([opt_choice]),
                     opt_cost = torch.Tensor([float(plan.cost)]),
                     y_t = torch.Tensor([float(plan_latency)]),  # placeholder for transformed targets
                     num_nodes = torch.Tensor(query.node_attr).shape[0], 
-                    # purturbed_runtimes = torch.Tensor(purturbed_runtimes[i]),
                     )
                 query_ids.append(query.q_id)
                 data_list.append(data)
@@ -322,12 +332,11 @@ class queryPlanPGDataset_nosplit(InMemoryDataset):
             data_list = [self.pre_transform(data) for data in data_list]
         
         # convert lists to arrays
-        plan_latency_list = np.array(plan_latency_list)
-        opt_plan_msk = np.array(opt_plan_msk)
         query_ids = np.array(query_ids)
+        opt_plan_latencies = np.array(opt_plan_latencies) # unique per query
 
         # get unique query ids
-        query_ids_unique = pd.unique(query_ids)
+        # query_ids_unique = pd.unique(query_ids)
         
         # get split slices
         train_slice = np.isin(query_ids, query_ids_unique)
@@ -351,7 +360,7 @@ class queryPlanPGDataset_withbenchmark(InMemoryDataset):
     def __init__(self, root='./',  split: str = "train", 
                  transform=None, pre_transform=None, 
                  pre_filter=None, force_reload = False,files_id=None,proc_files_id=None, labeled_data_dir='./labeled_data/',
-                 seed = 0, num_samples = None, val_samples = 0.1, test_samples = 0.01, test_slow_samples=0.5, benchmark_files_id = '',
+                 seed = 0, num_samples = None, val_samples = 0.1, test_samples = 0.1, test_slow_samples=0.5, benchmark_files_id = '',
                  exp_id=''):
         self.files_id = files_id
         self.proc_files_id = proc_files_id if proc_files_id is not None else files_id
@@ -504,7 +513,7 @@ class queryPlanPGDataset_withbenchmark(InMemoryDataset):
         benchmark_slice = np.isin(query_ids, benchmark_ids)
 
         # Implement split logic
-        query_ids_unique = np.array(query_ids_unique)  # non-benchmark query ids
+        # query_ids_unique = np.array(query_ids_unique)  # non-benchmark query ids
         np.random.seed(self.seed)  # Set the random seed
 
         # transform ratio sample sizes to numbers
@@ -538,7 +547,6 @@ class queryPlanPGDataset_withbenchmark(InMemoryDataset):
         # Remaining test set size
         remaining_test_samples = self.test_samples - len(test_long_run_qids)
         print("remaining_test_samples", remaining_test_samples)
-        print("query_ids_unique",query_ids_unique)
         remaining_test_samples = max(0, remaining_test_samples)  # Ensure non-negative
 
         # Sample remaining test set from non-long-running queries
