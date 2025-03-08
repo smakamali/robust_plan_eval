@@ -17,20 +17,23 @@ from util.custom_loss import aleatoric_loss, rmse_loss
 
 # Experiment parameters
 architecture_p = 'roq'
-experiment_id = 'job_main'
-cpus_per_trial = 3 # determines the number of cpus used by each experiment. when OOM happens, reducing this value may help to resolve by reducing the number of concurrent experiments
-gpus_per_trial = 0.1 # determines the number (or ratio) of gpus used by each experiment
-num_samples=500
+experiment_id = 'job_r41'
+total_cpus = os.cpu_count()
+cpus_per_trial = 2 # determines the number of cpus used by each experiment. when OOM happens, reducing this value may help to resolve by reducing the number of concurrent experiments
+gpus_per_trial = cpus_per_trial/total_cpus*0.95 # determines the number (or ratio) of gpus used by each experiment
+num_experiments=150
 num_epochs=150
-patience=15
+patience=25
+num_samples = None
 
 # queryPlanPGDataset data module parameteres
-files_id = 'job_v2.1'
-benchmark_files_id = 'job_v2.1'
+files_id = 'job_v2.2'
+proc_files_id = 'job_v2.2'
+benchmark_files_id = 'job_v2.2'
 labeled_data_dir = './labeled_data/job/'
 results_dir ='./param_data/'
-seed = 2
-reload_data = False
+seed = 110
+reload_data = True
 val_samples = 0.1
 test_samples = 0.01
 test_slow_samples = 0.0
@@ -46,7 +49,8 @@ set_seed(seed)
 print("loading train")
 train_set = queryPlanPGDataset_withbenchmark(
     split= 'train', 
-    files_id = files_id, 
+    files_id = files_id,
+    proc_files_id=proc_files_id,
     benchmark_files_id=benchmark_files_id,
     labeled_data_dir=labeled_data_dir,  
     force_reload=reload_data, 
@@ -62,6 +66,7 @@ print("loading val")
 val_set = queryPlanPGDataset_withbenchmark(
     split= 'val', 
     files_id = files_id,
+    proc_files_id=proc_files_id,
     exp_id=experiment_id
     )
 print("{} queries and {} samples in vlidation dataset: ".format(np.unique(np.array(val_set.query_id)).shape[0],val_set.len()))
@@ -100,105 +105,51 @@ yTransFunc = target_log_transform(train_set)
 
 train_set = yTransFunc.transform(train_set)
 val_set = yTransFunc.transform(val_set)
-# test_set = yTransFunc.transform(test_set)
 
 # config = {
-#     # Neo's param search space
+#     # Roq's param search space
+#     'node_embd_dim': tune.choice([16,32,64]),
+#     'query_module_out': tune.choice([256,128,64]),
+#     'qp_attheads': tune.randint(1,3),
+#     'qp_gnn_ls':tune.randint(2,5),
+#     'query_graph_embd_dim': tune.choice([32,64,128]),
 
-#     # 'query_module_in': tune.choice([128,256,512]),
-#     'query_module_in': tune.choice([128]),
-#     # 'query_module_out': tune.choice([16,32,64]),
-#     'query_module_out': tune.choice([16]),
+#     'TCNNin':tune.choice([512]),
+#     'TCNNout':tune.choice([128]),
 
-#     # 'TCNNin':tune.choice([64,128,256]),
-#     'TCNNin':tune.choice([256]),
-#     # 'TCNNout':tune.choice([32,64]),
-#     'TCNNout':tune.choice([32]),
+#     'finalMLPin': tune.choice([128]),
+#     'finalMLPout': tune.choice([32]),
 
-#     # 'finalMLPin': tune.choice([128,256,512]),
-#     'finalMLPin': tune.choice([512]),
-#     # 'finalMLPout': tune.choice([64,128]),
-#     'finalMLPout': tune.choice([64]),
-    
-#     # 'batch_size': tune.choice([128,256,512]),
-#     'batch_size': tune.choice([512]),
-
-#     'dropout': tune.uniform(0.05,.2),
-#     # 'dropout': tune.choice([.1]),
-#     'lr': tune.qloguniform(1e-4, 1e-2, 5e-5),
-#     # 'lr': tune.choice([1e-3]),
-#     "rlrop_patience": tune.choice([5,6,7,8,9,10]),
-#     # "rlrop_patience": tune.choice([10]),
-#     "rlrop_factor": tune.uniform(0.9,0.1)
-#     # "rlrop_factor": tune.choice([0.5])
-# }
-
-
-# {
-#     # Bao's param search space
-#     'TCNNin':tune.choice([64,128,256]),
-#     'TCNNout':tune.choice([32,64]),
-
-#     'finalMLPin': tune.choice([128,256,512]),
-#     'finalMLPout': tune.choice([64,128]),
-    
-#     'batch_size': tune.choice([128,256,512]),
-#     'dropout': tune.uniform(0.05,.2),
-#     'lr': tune.qloguniform(1e-4, 1e-2, 5e-5),
-#     }  
-
-    # Roq's param fine tune lr 
-    # 'node_embd_dim': tune.choice([32]),
-    # 'query_module_out': tune.choice([128]),
-    # 'qp_attheads': tune.choice([1]),
-    # 'qp_gnn_ls':tune.choice([2]),
-
-    # 'TCNNin':tune.choice([64]),
-    # 'TCNNout':tune.choice([32]),
-
-    # 'finalMLPin': tune.choice([128]),
-    # 'finalMLPout': tune.choice([64]),
-    
-    # 'batch_size': tune.choice([256]),
-    # 'dropout': tune.uniform(0.05,.2),
-    # 'lr': tune.qloguniform(1e-4, 1e-2, 5e-5),
-
-    # Roq's param search space
-    # 'node_embd_dim': tune.choice([8,16,32,64]),
-    # 'query_module_out': tune.choice([32,64,128,256]),
-    # 'qp_attheads': tune.randint(1,3),
-    # 'qp_gnn_ls':tune.randint(2,5),
-
-    # 'TCNNin':tune.choice([64,128,256]),
-    # 'TCNNout':tune.choice([32,64]),
-
-    # 'finalMLPin': tune.choice([128,256,512]),
-    # 'finalMLPout': tune.choice([64,128]),
-    
-    # 'batch_size': tune.choice([128,256,512]),
-    # 'dropout': tune.uniform(0.05,.2),
-    # 'lr': tune.qloguniform(1e-4, 1e-2, 5e-5),
+#     'batch_size': tune.choice([128]),
+#     # 'dropout': tune.uniform(0.05,.2),
+#     'dropout': tune.choice([.1]),
+#     # 'lr': tune.qloguniform(1e-4, 1e-2, 5e-5),
+#     'lr': tune.choice([1e-3]),
+#     "rlrop_patience": tune.choice([10]),
+#     # "rlrop_factor": tune.uniform(0.9,0.1)
+#     "rlrop_factor": tune.choice([0.1])
+#     }
 
 config = {
-    # Roq's param search space
-    'node_embd_dim': tune.choice([16,32,64]),
-    'query_module_out': tune.choice([256,128,64]),
-    'qp_attheads': tune.randint(1,3),
-    'qp_gnn_ls':tune.randint(2,5),
-    'query_graph_embd_dim': tune.choice([32,64,128]),
+#     # Roq's param search space for fine tuning lr
+    'node_embd_dim': tune.choice([32]),
+    'qp_attheads': tune.choice([1]),
+    'qp_gnn_ls':tune.choice([4]),
+    'query_graph_embd_dim': tune.choice([64]),
+    'query_module_out': tune.choice([128]),
 
-    'TCNNin':tune.choice([256,128,64]),
-    'TCNNout':tune.choice([128,64,32]),
+    'TCNNin':tune.choice([256]),
+    'TCNNout':tune.choice([64]),
 
-    'finalMLPin': tune.choice([128,64]),
-    'finalMLPout': tune.choice([64,32]),
-
-    'batch_size': tune.choice([512,256,128]),
+    'finalMLPin': tune.choice([256]),
+    'finalMLPout': tune.choice([64]),
+    
+    'batch_size': tune.choice([32,64,128]),
     'dropout': tune.uniform(0.05,.2),
     'lr': tune.qloguniform(1e-4, 1e-2, 5e-5),
     "rlrop_patience": tune.choice([5,6,7,8,9,10]),
     "rlrop_factor": tune.uniform(0.9,0.1)
-    }
+}
 
 plan_attr_shape = train_set[0].plan_attr.shape
 plan_ord_shape = train_set[0].plan_ord.shape
@@ -281,7 +232,7 @@ def train_model(config,num_epochs,data,cpus,architecture_p):
     
     trainer.fit(model,train_loader,val_loader)
 
-def tune_lcm_gnn_pl(num_samples=1000, num_epochs=400, cpus = 2, gpus_per_trial = 0, architecture_p = 'roq'):
+def tune_lcm_gnn_pl(num_experiments=1000, num_epochs=400, cpus = 2, gpus_per_trial = 0, architecture_p = 'roq'):
     
     train_ref = ray.put(train_set)
     val_ref = ray.put(val_set)    
@@ -316,7 +267,7 @@ def tune_lcm_gnn_pl(num_samples=1000, num_epochs=400, cpus = 2, gpus_per_trial =
             metric="loss",
             mode="min",
             scheduler=scheduler,
-            num_samples=num_samples,
+            num_samples=num_experiments,
             ),
         run_config=air.RunConfig(
             name="tune_lcm_{}".format(architecture_p),
@@ -329,7 +280,7 @@ def tune_lcm_gnn_pl(num_samples=1000, num_epochs=400, cpus = 2, gpus_per_trial =
     print("Best hyperparameters found were: ", results.get_best_result().config)
     return results
 
-results = tune_lcm_gnn_pl(num_samples=num_samples, num_epochs=num_epochs, cpus = cpus_per_trial, gpus_per_trial = gpus_per_trial, architecture_p = architecture_p)
+results = tune_lcm_gnn_pl(num_experiments=num_experiments, num_epochs=num_epochs, cpus = cpus_per_trial, gpus_per_trial = gpus_per_trial, architecture_p = architecture_p)
 
 # save param tuning results to disk
 results_df = results.get_dataframe()
