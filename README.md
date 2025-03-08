@@ -201,9 +201,13 @@ if __name__ == '__main__':
 
 ### Model Architectures
 
-This script supports multiple GNN-based architectures:
-- **ROQ**: A GNN-based architecture specifically designed for query plan latency prediction.
-- **NEO** and **BAO**: Alternative models for comparison.
+This script supports multiple ML-based learned cost models for query plan latency prediction:
+- **ROQ** is a GNN-based architecture specifically designed for query plan latency prediction. It offers a holistic framework based on a risk-aware learning approach. Roq includes a novel formalization of the notion of robustness in the context of query optimization and a principled approach for its quantification and measurement based on approximate probabilistic ML. It also includes novel strategies and algorithms for query plan evaluation and selection. Roq includes a novel learned cost model that is designed to predict the cost of query execution and the associated risks and performs query optimization accordingly [1].
+
+- **NEO** is a learned query optimizer that uses a learned cost model that takes query and plan attributes as input. It feeds the query attributes to a stack of MLP layers and appends the resulting vector to the attributes of every node in the vectorized plan tree. It then feeds the extended plan trees to a stack of TCNN layers followed by another stack of MLPs which gradually reduce the dimensionality of the vector and ultimately predict the execution time [2].
+- **BAO** uses a more lightweight cost model that takes plans as input and predicts latency. At each node of the vectorized plan tree, in addition to node type, it captures the estimated cardinality and cost [3].
+- **Lero** is a more recent work that proposes a learning-to-rank approach to a learned query optimizer. It learns to compare pairs of plans in the search space and create a total order. The model is trained using a pairwise ranking loss function. Additionally, it enumerates pairs of subplans traversed during search and uses them as additional samples to train the model [4].
+- **Balsa** is a learned query optimizer that avoids relying on expert demonstrations. It bootstraps from a simple simulator and then fine-tunes its deep reinforcement learning model using real query execution latency feedback [5].
 
 ### Data Preprocessing
 
@@ -308,3 +312,10 @@ For model evaluation use `eval.py` module. This module performs the following ta
 ```bash
 python -m scripts.eval
 ```
+
+### Footnotes:
+1. [Roq: Robust Query Optimization Based on a Risk-aware Learned Cost Model](https://arxiv.org/abs/2401.15210)
+2. [Neo: A Learned Query Optimizer](https://www.vldb.org/pvldb/vol12/p1705-marcus.pdf)
+3. [Bao: Making Learned Query Optimization Practical](dl.acm.org/doi/pdf/10.1145/3448016.3452838)
+4. [Lero: A Learning-to-Rank Query Optimizer](https://dlnext.acm.org/doi/abs/10.14778/3583140.3583160)
+5. [Balsa: Learning a Query Optimizer Without Expert Demonstrations](https://zongheng.me/pubs/balsa-sigmod2022.pdf)
