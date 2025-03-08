@@ -6,7 +6,7 @@ import pickle
 import json
 import torch
 import numpy as np
-from pyg_data import queryPlanPGDataset_nosplit, queryPlanPGDataset_withbenchmark
+from util.pyg_data import queryPlanPGDataset_nosplit, queryPlanPGDataset_withbenchmark
 from util.util import set_seed, load_model_params
 from util.data_transform import *
 from util.custom_loss import aleatoric_loss, rmse_loss, bce_loss
@@ -16,7 +16,7 @@ from lcm.neo_bao_model import lcm_pl as neo_bao_model
 from lcm.lero_model import LeroModelPairwise as leroPairwise
 from lcm.balsa_model import balsa_simulation, balsa_model
 from sklearn.model_selection import KFold,train_test_split
-from single_test import test
+from scripts.single_test import test
 from util.eval_util import *
 from torch_geometric.loader import DataLoader
 

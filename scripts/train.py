@@ -5,7 +5,7 @@ import time
 import pickle
 import torch
 import numpy as np
-from pyg_data import queryPlanPGDataset_withbenchmark
+from util.pyg_data import queryPlanPGDataset_withbenchmark
 from util.util import set_seed, load_model_params
 from util.data_transform import *
 from util.custom_loss import aleatoric_loss, rmse_loss,bce_loss
@@ -21,7 +21,7 @@ models_path = os.path.join('.','lightning_models')
 def train(
     experiment_id = 'job', architecture_p = 'roq', 
     files_id = 'temp', proc_files_id=None,benchmark_files_id='job_main', labeled_data_dir = './labeled_data/',
-    max_epochs = 1000, patience = 100, num_experiments = 5, 
+    default_max_epochs = 1000, default_patience = 100, default_min_delta = 0.001, num_experiments = 5, 
     num_workers = 10, seed = 0, reload_data = False, 
     num_samples = None,val_samples = 0.1,test_samples = 200,test_slow_samples=None,
     target = 'latency'):
@@ -40,10 +40,16 @@ def train(
             break
 
     pretrain = config.pop('pretrain',True)
-    max_epochs = config.pop('max_epochs',max_epochs)
-    patience = config.pop('patience',patience)
-    min_delta = config.pop('min_delta',0.001)
+    max_epochs = config.pop('max_epochs')
+    patience = config.pop('patience',default_patience)
+    min_delta = config.pop('min_delta',default_min_delta)
     batch_size= config['batch_size']
+
+    if default_max_epochs is None:
+        print("using max_epochs from config file")
+    else:
+        max_epochs = default_max_epochs
+        print("using default max epochs")
 
     torch.set_float32_matmul_precision('high')
 
@@ -269,13 +275,13 @@ if __name__ == '__main__':
 
     train(
         experiment_id = 'job_main_balsa_temp',
-        architecture_p = 'balsa',
+        architecture_p = 'roq',
         files_id='job_v2.1',
         proc_files_id='job_v2.1',
         benchmark_files_id ='job_v2.1',
         labeled_data_dir='./labeled_data/job/',
-        max_epochs = 5,
-        patience = 2,
+        default_max_epochs = 5,
+        default_patience = 2,
         num_experiments = 1,
         num_workers = 4,
         seed = 0,

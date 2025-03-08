@@ -80,7 +80,7 @@ Steps involved in preparing data for a dataset and a workload:
     ```
     Create explain tables which are needed for compiling queries:
     ```
-    python create_exp_tables.py
+    python -m scripts.create_exp_tables
     ```
 
 4. **Collect database samples:**
@@ -88,7 +88,7 @@ Steps involved in preparing data for a dataset and a workload:
     The first step involves collecting samples from each table of the database. These samples are used in the subsequent steps for capturing database statistics.
 
     ```
-    python db_sampler.py
+    python -m scripts.db_sampler
     ```
 
     Parameters to modify in `db_sampler.py`:
@@ -101,7 +101,7 @@ Steps involved in preparing data for a dataset and a workload:
 
     This script includes several steps from compiling plans based on hintsets, collecting labels, encoding queries, and encoding plans. This can take several minutes depending on the number of queries provided in the `./input` direcotry.  
     ```
-    python gen_label_plans.py
+    python -m scripts.gen_label_plans
     ```
     
     Parameters to modify in `gen_label_plans.py`
@@ -227,10 +227,10 @@ tensorboard --logdir=./lightning_logs
 
 ### Example Execution
 
-The following command will start the training process using the ROQ architecture:
+The following command will start the training process given the parameters specified in `scripts.train`:
 
 ```bash
-python train.py
+python -m scripts.train
 ```
 
 Best models will be saved in the `./lightning_models` directory, and logs can be found in `./lightning_logs`.
@@ -242,6 +242,8 @@ USe the script `run_experiments.py` This script orchestrates the training of mul
 - **Neo**
 - **Bao**
 - **Roq**
+- **Lero**
+- **Balsa**
 
 It calls the `train()` function from the `train.py` module, training each architecture for multiple experiments and saving the training times to a results file.
 
@@ -255,6 +257,8 @@ architectures = [
     'bao',
     'neo',
     'roq',
+    'lero',
+    'balsa',
 ]
 experiment_id = 'all_models_ce'
 
@@ -280,10 +284,10 @@ for arch in architectures:
     training_time_dict[arch] = training_time
 ```
 
-The run the script:
+To run the script:
 
 ```bash
-python run_experiments.py
+python -m scripts.run_experiments
 ```
 ### Output
 
@@ -302,5 +306,5 @@ For model evaluation use `eval.py` module. This module performs the following ta
 
 ### Usage example
 ```bash
-python eval.py
+python -m scripts.eval
 ```

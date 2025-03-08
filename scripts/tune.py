@@ -8,7 +8,7 @@ from ray import air, tune
 from ray.tune.schedulers import ASHAScheduler
 from ray.tune.integration.pytorch_lightning import TuneReportCheckpointCallback
 from torch_geometric.loader import DataLoader
-from pyg_data import queryPlanPGDataset_withbenchmark
+from util.pyg_data import queryPlanPGDataset_withbenchmark
 from util.util import set_seed
 from util.data_transform import *
 from lcm.roq_model import lcm_pl as roq

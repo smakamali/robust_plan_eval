@@ -1,6 +1,6 @@
 import os
 import pickle
-from train import train
+from scripts.train import train
 
 results_dir = os.path.join('.','results')
 
@@ -16,8 +16,7 @@ if __name__ == '__main__':
         'bao',
         'neo',
         ]
-    experiment_id = 'ceb_1000_x5_s317'
-    # experiment_id = 'job_main_1x_wlsh_base'#_s313
+    experiment_id = 'temp_ceb'
     
     training_time_dict  = {}
     for arch in architectures:
@@ -29,8 +28,8 @@ if __name__ == '__main__':
             proc_files_id='ceb_1000',
             benchmark_files_id = 'job_v2.2',
             labeled_data_dir='./labeled_data/ceb/',
-            max_epochs = 100,
-            patience = 10,
+            default_max_epochs = 2,
+            default_patience = 10,
             num_experiments = 1,
             num_workers = 5,
             seed = 310,
