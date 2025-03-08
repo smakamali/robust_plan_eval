@@ -421,7 +421,7 @@ def evaluate_method(pred, uncertainty, data_obj, strategy,
     evaluation_time = toc - tic
 
     prune_label = 'prune' if prune else ''
-    print(strategy,prune_label,': corr :',corr_all)
+    print(strategy,prune_label,': spearman\'s corr :',corr_all)
     print('queries with no plans after pruning:',count_fail)
     print('evaluation time:', evaluation_time)
     print('')

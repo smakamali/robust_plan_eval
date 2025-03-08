@@ -128,7 +128,7 @@ class minmaxScale(BaseTransform):
         _, min_graph, max_graph = getStats(graph_attr_log)
 
         plan_attr_shape = train_set[0].plan_attr.shape
-        temp=train_set.data.plan_attr.clone()
+        temp=train_set._data.plan_attr.clone()
         temp=temp.reshape(-1,plan_attr_shape[0],plan_attr_shape[1])
         temp=temp.transpose(1,2)
         plan_attr_rsh=temp.reshape(-1,plan_attr_shape[0])
@@ -151,7 +151,7 @@ class minmaxScale(BaseTransform):
             egde_attr_log, self.edgeRange[0], self.edgeRange[1]
             )
         
-        graph_attr = torch.reshape(data.data.graph_attr,(-1, self.graph_attr_num))
+        graph_attr = torch.reshape(data._data.graph_attr,(-1, self.graph_attr_num))
         graph_attr = minmaxScaling(
             graph_attr, self.graphRange[0], self.graphRange[1]
             )
@@ -160,7 +160,7 @@ class minmaxScale(BaseTransform):
         # print("before:",data[0].plan_attr[3,:])
         # print("min:",self.plan_attrRange[0],"max:",self.plan_attrRange[1])
         plan_attr_shape = data[0].plan_attr.shape
-        temp=data.data.plan_attr.clone()
+        temp=data._data.plan_attr.clone()
         temp=temp.reshape(-1,plan_attr_shape[0],plan_attr_shape[1])
         temp=temp.transpose(1,2)
         temp=temp.reshape(-1,plan_attr_shape[0])
@@ -173,8 +173,8 @@ class minmaxScale(BaseTransform):
         temp = plan_attr_sc.reshape(-1, plan_attr_shape[1], plan_attr_shape[0])
         # 2. Transpose back the middle and last dimensions
         temp = temp.transpose(1, 2)
-        # 3. Finally reshape to match the original data.data.plan_attr shape
-        data._data.plan_attr = temp.reshape(data.data.plan_attr.shape)
+        # 3. Finally reshape to match the original data._data.plan_attr shape
+        data._data.plan_attr = temp.reshape(data._data.plan_attr.shape)
         # print("after:",data[0].plan_attr[3,:])
 
         return data
