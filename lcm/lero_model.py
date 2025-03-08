@@ -265,33 +265,26 @@ class LeroModel(pl.LightningModule):
 
         sigma = torch.zeros(lero_out.shape).to(self.__device)
         return torch.stack((lero_out, sigma),dim=1)
-
-    def training_step(self, batch, batch_idx):
-        # training_step defines the train loop. It is independent of forward
+        
+    def step(self, batch, stage="train"):
         y_pred = self(batch)
-        labels = batch.y_t.reshape(-1,1)
+        # Note:Lero does not require target transformation
+        labels = batch.y.reshape(-1,1)
         loss = self.criterion(y_pred, labels)
         corr = self.spearmans_corr(y_pred[:,0], labels)
         qerr = self.qerror(y_pred[:,0], labels)
-        metrics_dict = {'train_loss':loss, 'train_corr':corr, 'train_q-error':qerr}
-        self.log_dict(
-            metrics_dict, batch_size = self.batch_size,
-            on_step=False, on_epoch=True
-            )
-        return loss
-    
-    def validation_step(self, batch, batch_idx):
-        y_pred = self(batch)
-        labels = batch.y_t.reshape(-1,1)
-        loss = self.criterion(y_pred, labels)
-        corr = self.spearmans_corr(y_pred[:,0], labels)
-        qerr = self.qerror(y_pred[:,0], labels)
-        metrics_dict = {'val_loss':loss, 'val_corr':corr, 'val_q-error':qerr}
+        metrics_dict = {f"{stage}_loss":loss, f"{stage}_corr":corr, f"{stage}_q-error":qerr}
         self.log_dict(
             metrics_dict, batch_size = self.batch_size,
             on_step=False, on_epoch=True
             )
         return metrics_dict
+
+    def training_step(self, batch, batch_idx):
+        return self.step(batch, stage="train")["train_loss"]
+    
+    def validation_step(self, batch, batch_idx):
+        return self.step(batch, stage="val")
     
     def configure_optimizers(self):
         optimizer = AdamW(self.parameters(),lr=self.lr)
@@ -306,7 +299,6 @@ class LeroModel(pl.LightningModule):
                 "frequency": 1,
                 }
             }
-        # return optimizer
     
     def predict_step(self, batch, batch_idx, dataloader_idx=0):
         return self(batch)

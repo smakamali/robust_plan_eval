@@ -221,7 +221,6 @@ class lcm_pl(pl.LightningModule):
         return torch.stack((mu, sigma),dim=1)
 
     def step(self, batch, stage="train"):
-
         y_pred = self(batch)
         labels = batch.y_t.reshape(-1,1)
         loss = self.criterion(y_pred, labels)
@@ -242,7 +241,8 @@ class lcm_pl(pl.LightningModule):
     
     def configure_optimizers(self):
         optimizer = AdamW(self.parameters(),lr=self.lr)
-        scheduler = ReduceLROnPlateau(optimizer,patience=self.rlrop_patience,factor=self.rlrop_factor)
+        scheduler = ReduceLROnPlateau(
+            optimizer,patience=self.rlrop_patience,factor=self.rlrop_factor)
         return {
             "optimizer": optimizer,
             "lr_scheduler": {
