@@ -1,18 +1,11 @@
 ####################### Single Test #######################
 
 import os
-import pickle
-import json
 import torch
 import numpy as np
-import pandas as pd
-# from pyg_data import queryPlanPGDataset_withbenchmark
-from util.util import set_seed, load_model_params, load_best_model_paths
+from util.util import set_seed, load_model_params
 from util.data_transform import *
-# from util.custom_loss import aleatoric_loss, rmse_loss
 import pytorch_lightning as pl
-# from lcm.roq_model import lcm_pl as roq
-from lcm.neo_bao_model import lcm_pl as neo_bao
 from torch_geometric.loader import DataLoader
 from util.torch_util import LitMCdropoutModel
 from util.eval_util import *
@@ -47,81 +40,13 @@ def test(
     if not os.path.exists(results_dir):
         os.mkdir(results_dir)
 
-    # # loading model hyper-parameters
-    neo_config = load_model_params('neo')
-    bao_config = load_model_params('bao')
+    # loading model hyper-parameters
     roq_config = load_model_params('roq')
 
     # unpack models
-    neo = models[0]
-    bao = models[1]
-    roq = models[2]
-
-    # # loading model paths
-    # best_model_paths = load_best_model_paths('roq',experiment_id)
-    # neo_paths =  load_best_model_paths('neo',experiment_id)
-    # bao_paths =  load_best_model_paths('bao',experiment_id)
-
-    # Load train, validation, and test datasets
-    # print("loading train")
-    # train_set = queryPlanPGDataset_withbenchmark(
-    #     split= 'train', files_id = files_id,
-    #     benchmark_files_id=benchmark_files_id,
-    #     force_reload=reload_data, seed = seed,
-    #     val_samples = val_samples, test_samples = test_samples,
-    #     test_slow_samples = test_slow_samples,
-    #     exp_id=experiment_id
-    #     )
-    # print("{} queries and {} samples in training dataset: ".format(np.unique(np.array(train_set.query_id)).shape[0],train_set.len()))
-    
-    # print("loading val")
-    # val_set = queryPlanPGDataset_withbenchmark(
-    #     split= 'val', 
-    #     files_id = files_id,
-    #     exp_id=experiment_id
-    #     )
-    # print("{} queries and {} samples in vlidation dataset: ".format(np.unique(np.array(val_set.query_id)).shape[0],val_set.len()))
-    
-    # print("loading test")
-    # test_set = queryPlanPGDataset_withbenchmark(
-    #     split= test_split, 
-    #     files_id = files_id,
-    #     exp_id=experiment_id
-    #     )
-    # print("{} queries and {} samples in test dataset: ".format(np.unique(np.array(test_set.query_id)).shape[0],test_set.len()))
-    
-    # Perform data transformations on inputs 
-    # drop_const = dropConst(train_set)
-    # train_set = drop_const(train_set)
-    # val_set = drop_const(val_set)
-    # test_set = drop_const(test_set)
-
-    # null_imp = nullImputation(train_set)
-    # train_set = null_imp(train_set)
-    # val_set = null_imp(val_set)
-    # test_set = null_imp(test_set)
-
-    # minmax_scale = minmaxScale(train_set)
-    # train_set = minmax_scale(train_set)
-    # val_set = minmax_scale(val_set)
-    # test_set = minmax_scale(test_set)
-
-    # # Initialize data transformations on targets 
-    # yTransFunc = target_log_transform(train_set)
-    # yTransFunc = target_transform(train_set)
-
-    # Capture node, edge, graph, and plan attribute shapes to initialize the model 
-    # plan_attr_shape = train_set[0].plan_attr.shape
-    # plan_ord_shape = train_set[0].plan_ord.shape
-    # graph_attr_shape= train_set[0].graph_attr.shape
-    # edge_attr_shape = train_set[0].edge_attr_s.shape
-    # node_attr_shape = train_set[0].x_s.shape
-
-    # print("plan_attr_shape",plan_attr_shape)
-    # print("plan_ord_shape",plan_ord_shape)
-    # print("graph_attr_shape",graph_attr_shape)
-    # print("edge_attr_shape",edge_attr_shape)
-    # print("node_attr_shape",node_attr_shape)
+    if models is None or len(models) != 5:
+        raise ValueError("The 'models' variable must contain exactly five elements.")
+    roq, balsa, neo, bao, lero = models
 
     batch_size= roq_config['batch_size']
 
@@ -143,72 +68,8 @@ def test(
         shuffle=False, num_workers=num_workers, follow_batch=follow_batch,
         #  persistent_workers=True
         )
-    
-    # aleatoric_l = aleatoric_loss(device=device)
-    # rmse_l = rmse_loss()
 
     torch.set_float32_matmul_precision('high')
-
-    # qerror_dict = {}
-    # corr_dict = {}
-    # rt_res_dict = {}
-    # so_res_dict = {}
-    # agg_res_dict = {}
-
-    # For loop starts here
-
-    # for i,_ in enumerate(models):
-    # for i in [0,2,3,4]:
-        # best_model_path = best_model_paths[i]
-        # neo_path = neo_paths[i]
-        # bao_path = bao_paths[i]
-
-        # # Note: model paramteres must be passed unless they are the same of defaults
-        # model = roq.load_from_checkpoint(
-        #     best_model_path, 
-        #     num_node = node_attr_shape[0], 
-        #     node_dim = node_attr_shape[1],
-        #     edge_dim = edge_attr_shape[1],#fill_value =0, 
-        #     numPlanFeat=plan_attr_shape,
-        #     numPlanOrdFeat=plan_ord_shape,
-        #     numQueryGraphFeat = graph_attr_shape[0],
-        #     with_var = True, device = device, 
-        #     criterion = aleatoric_l,
-        #     **roq_config
-        #     )
-
-        # neo_vanilla = neo_bao.load_from_checkpoint(
-        #     neo_path,
-        #     num_node = node_attr_shape[0], 
-        #     node_dim = node_attr_shape[1],
-        #     edge_dim = edge_attr_shape[1],
-        #     numPlanFeat=plan_attr_shape,
-        #     numPlanOrdFeat=plan_ord_shape,
-        #     numQueryGraphFeat = graph_attr_shape[0],
-        #     device = device, 
-        #     criterion = rmse_l,
-        #     architecture = 'neo',
-        #     **neo_config
-        #     )
-
-        # bao_vanilla = neo_bao.load_from_checkpoint(
-        #     bao_path,
-        #     num_node = node_attr_shape[0], 
-        #     node_dim = node_attr_shape[1],
-        #     edge_dim = edge_attr_shape[1],
-        #     numPlanFeat=plan_attr_shape,
-        #     numPlanOrdFeat=plan_ord_shape,
-        #     numQueryGraphFeat = graph_attr_shape[0],
-        #     device = device, 
-        #     criterion = rmse_l,
-        #     architecture = 'bao',
-        #     **bao_config
-        #     )
-
-    # Transform targets for Roq
-    # train_set = yTransFunc.transform(train_set)
-    # val_set = yTransFunc.transform(val_set)
-    # test_set = yTransFunc.transform(test_set)
 
     # Enables variational inference using MC dropout
     LitMCDPModel = LitMCdropoutModel(
@@ -218,6 +79,7 @@ def test(
 
     ############## Making Predictions ###############
     trainer = pl.Trainer(accelerator=device.type)
+
 
     ########## Making predictions for Roq ###########
     # Validation
@@ -240,24 +102,7 @@ def test(
     ypreds_test_m, ypreds_test_Ud, ypreds_test_Um = comput_uncertainty(ypreds_test_mc)
     ypreds_test_m_org=yTransFunc.inverse_transform(torch.Tensor(ypreds_test_m))
 
-        ########## Make predication for Neo and Bao ##########
-
-        # Replace the transformed targets with ones suitable for Neo and Bao
-        # train_set = yTransFunc.transform(train_set)
-        # val_set = yTransFunc.transform(val_set)
-        # test_set = yTransFunc.transform(test_set)
-
-        # val_loader = DataLoader(
-        #     val_set, batch_size=batch_size,
-        #     shuffle=False, num_workers=num_workers, follow_batch=follow_batch,
-        #     #  persistent_workers=True
-        #     )
-        # test_loader = DataLoader(
-        #     test_set, batch_size=batch_size,
-        #     shuffle=False, num_workers=num_workers, follow_batch=follow_batch,
-        #     #  persistent_workers=True
-        #     )
-        
+    ######### Make predication for the baselines ##########
     # Model Inference
     # Neo
     ypreds_test_neo_vanilla = trainer.predict(neo, test_loader)
@@ -269,7 +114,16 @@ def test(
     bao_preds2_vanilla = torch.vstack(ypreds_test_bao_vanilla).numpy()
     bao_preds2_org_vanilla=yTransFunc.inverse_transform(torch.Tensor(bao_preds2_vanilla))
 
-    
+    # Lero
+    ypreds_test_lero = trainer.predict(lero, test_loader)
+    ypreds_test_lero = torch.vstack(ypreds_test_lero)
+    # ypreds_test_lero=yTransFunc.inverse_transform(torch.Tensor(ypreds_test_lero))
+
+    # Balsa
+    ypreds_test_balsa = trainer.predict(balsa, test_loader)
+    ypreds_test_balsa = torch.vstack(ypreds_test_balsa)
+    ypreds_test_balsa=yTransFunc.inverse_transform(torch.Tensor(ypreds_test_balsa))
+
     ############ Tuning strategy parameters ############
     
     # Tune plan selection arguments
@@ -560,7 +414,7 @@ def test(
         ypreds_test_m,ypreds_test_Ud,test_set , 
         strategy='baseline opt',prune=True,**opt_data_prune_ratio)
     
-    # Neo and Bao Vanilla
+    # Baselines: Neo, Bao, Lero, Balsa
     neo_subopt2_vanilla,neo_runtime2_vanilla,_ = evaluate_method(
         neo_preds2_vanilla[:,0],neo_preds2_vanilla[:,1],test_set , 
         strategy='baseline ml')
@@ -569,6 +423,13 @@ def test(
         bao_preds2_vanilla[:,0],bao_preds2_vanilla[:,1],test_set , 
         strategy='baseline ml')
 
+    lero_subopt,lero_runtime,_ = evaluate_method(
+            ypreds_test_lero[:,0],ypreds_test_lero[:,1],test_set, 
+            strategy='baseline ml')
+    
+    balsa_subopt,balsa_runtime,_ = evaluate_method(
+            ypreds_test_balsa[:,0],ypreds_test_balsa[:,1],test_set, 
+            strategy='baseline ml')
 
     ################## Compute q-error ##################
     q_error_num_joins, _ = lcm_model_eval(
@@ -595,51 +456,33 @@ def test(
         ,load_from_disk=False, files_id = files_id,show_fig=show_fig
         )
     
+    lero_qerror, _ = lcm_model_eval(
+        test_set, ypreds_test_lero[:,0], 
+        dataset_label = 'test_data', model_label = 'lero'
+        ,load_from_disk=False, files_id = files_id,show_fig=show_fig
+        )
+    
+    balsa_qerror, _ = lcm_model_eval(
+        test_set, ypreds_test_balsa[:,0], 
+        dataset_label = 'test_data', model_label = 'balsa'
+        ,load_from_disk=False, files_id = files_id,show_fig=show_fig
+        )
+    
     qerrors = pd.DataFrame(
         [bao_qerror2_vanilla.q_error,
-            neo_qerror2_vanilla.q_error,
+        neo_qerror2_vanilla.q_error,
+        lero_qerror.q_error,
+        balsa_qerror.q_error,
         q_error_num_joins.q_error,
         roq_mcdp_num_joins.q_error
         ]).T
-    qerrors.columns = ['Bao', 'Neo','Roq','Roq MCDO']
+    qerrors.columns = ['Bao','Neo','Lero','Balsa','Roq','Roq MCDO']
 
-
-    ########### Compute Perason's correlations ############
-    target = test_set.y.numpy()
-    pearson_coef1, _ = compute_pearsonr(test_set.opt_cost,target)
-    pearson_coef4, _ = compute_pearsonr(ypreds_tens_test_org[:,0].squeeze(),target)
-    pearson_coef5, _ = compute_pearsonr(bao_preds2_org_vanilla[:,0].squeeze(),target)
-    pearson_coef6, _ = compute_pearsonr(neo_preds2_org_vanilla[:,0].squeeze(),target)
-    pearson_coef7, _ = compute_pearsonr(ypreds_test_m_org,target)
-
-    ########### Compute Spearman's correlations ###########
-    spearmanr_coef1, _ = compute_spearmanr((test_set.opt_cost),target)
-    spearmanr_coef4, _ = compute_spearmanr(ypreds_tens_test_org[:,0].squeeze(),target)
-    spearmanr_coef5, _ = compute_spearmanr(bao_preds2_org_vanilla[:,0].squeeze(),target)
-    spearmanr_coef6, _ = compute_spearmanr(neo_preds2_org_vanilla[:,0].squeeze(),target)
-    spearmanr_coef7, _ = compute_spearmanr(ypreds_test_m_org,target)
-
-    labels = ['Cost','Bao', 'Neo','Roq','Roq MCDO']
-    
-    pearson_values = [
-        pearson_coef1,pearson_coef5,pearson_coef6,
-        pearson_coef4,pearson_coef7
-        ]
-    
-    spearman_values = [
-        spearmanr_coef1,spearmanr_coef5,spearmanr_coef6,
-        spearmanr_coef4,spearmanr_coef7
-        ]
-    
-    corr_df = pd.DataFrame(
-        np.array([pearson_values,spearman_values]), 
-        columns=labels,index=['Pearson','Spearman']
-        )
 
     labels = [
         'optimizer',
         'optimizer pruned',
-        'Neo','Bao',
+        'Neo','Bao','Lero','Balsa',
         'base model',
         'base model pruned',
         'mc dropout',
@@ -669,6 +512,7 @@ def test(
         test_opt_runtimes,
         test_opt_prune_runtimes,
         neo_runtime2_vanilla,bao_runtime2_vanilla,
+        lero_runtime, balsa_runtime,
         test_base_ml_runtimes,
         test_base_ml_prune_runtimes,
         test_mc_ml_runtimes,
@@ -698,6 +542,7 @@ def test(
         test_opt_subopts,
         test_opt_prune_subopts,
         neo_subopt2_vanilla,bao_subopt2_vanilla,
+        lero_subopt, balsa_subopt,
         test_base_ml_subopts,
         test_base_ml_prune_subopts,
         test_mc_ml_subopts,
@@ -742,28 +587,24 @@ def test(
     subopt_res = subopt_res.loc[:,['mean','50%','60%','70%','80%','90%','95%','99%','max']].sort_values(by='mean')
 
     agg_res = runtime_res.merge(subopt_res,how='outer',left_index=True,right_index=True)
-    #runtime_res.join(subopt_res).sort_values(by='mean')
     
-    return qerrors, corr_df, runtime_details, subopt_details, agg_res
-    # qerror_dict[i]=qerrors
-    # corr_dict[i]=corr_df
-    # rt_res_dict[i]=runtime_details
-    # so_res_dict[i]=subopt_details
-    # agg_res_dict[i]=agg_res
+    result_dict = {
+        "q_ids":q_ids,
+        "target":test_set.y.tolist(),
+        "model base preds":ypreds_tens_test_org[:,0].tolist(), 
+        "bao preds":bao_preds2_org_vanilla[:,0].tolist(), 
+        "neo preds":neo_preds2_org_vanilla[:,0].tolist(), 
+        "lero preds":ypreds_test_lero[:,0].tolist(), 
+        "balsa preds":ypreds_test_balsa[:,0].tolist(),
+        "mc dropout preds":ypreds_test_m_org.tolist(), 
+        "optimizer cost":test_set.opt_cost.tolist(),
+        "qerror":qerrors,
+        "runtime_vals":rt_values,
+        "subopt_vals":so_values,
+        "labels":labels,
+        "runtime details":runtime_details,
+        "aggregate results":agg_res
+        }
 
-
-
-    # with open(os.path.join(results_dir,'qerror_dict_{}_{}.pkl'.format(experiment_id,test_split)), 'wb') as file:
-    #     pickle.dump(qerror_dict, file)
-
-    # with open(os.path.join(results_dir,'corr_dict_{}_{}.pkl'.format(experiment_id,test_split)), 'wb') as file:
-    #     pickle.dump(corr_dict, file)
-
-    # with open(os.path.join(results_dir,'rt_res_dict_{}_{}.pkl'.format(experiment_id,test_split)), 'wb') as file:
-    #     pickle.dump(rt_res_dict, file)
-
-    # with open(os.path.join(results_dir,'so_res_dict_{}_{}.pkl'.format(experiment_id,test_split)), 'wb') as file:
-    #     pickle.dump(so_res_dict, file)
-
-    # with open(os.path.join(results_dir,'agg_res_dict_{}_{}.pkl'.format(experiment_id,test_split)), 'wb') as file:
-    #     pickle.dump(agg_res_dict, file)
+    return result_dict
+    
