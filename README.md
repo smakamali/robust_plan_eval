@@ -313,7 +313,7 @@ For model evaluation use `eval.py` module. This module performs the following ta
 python -m scripts.eval
 ```
 
-### Footnotes:
+## References:
 1. [Roq: Robust Query Optimization Based on a Risk-aware Learned Cost Model](https://arxiv.org/abs/2401.15210)
 2. [Neo: A Learned Query Optimizer](https://www.vldb.org/pvldb/vol12/p1705-marcus.pdf)
 3. [Bao: Making Learned Query Optimization Practical](dl.acm.org/doi/pdf/10.1145/3448016.3452838)
